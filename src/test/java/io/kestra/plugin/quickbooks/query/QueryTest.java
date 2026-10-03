@@ -25,7 +25,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 
 @KestraTest
-class QueryTest {
+public class QueryTest {
 
     @Inject
     private RunContextFactory runContextFactory;
@@ -34,6 +34,7 @@ class QueryTest {
 
     @BeforeAll
     static void setup() {
+        io.kestra.plugin.quickbooks.AbstractQuickBooksConnection.setAllowLoopbackForTests(true);
         wireMockServer = new WireMockServer(WireMockConfiguration.options().dynamicPort());
         wireMockServer.start();
         WireMock.configureFor("localhost", wireMockServer.port());
@@ -48,14 +49,7 @@ class QueryTest {
     @SuperBuilder
     @Getter
     @NoArgsConstructor
-    static class TestQuery extends Query {
-        @Override
-        protected void validateUrl(String name, String url) throws Exception {
-            var uri = java.net.URI.create(url);
-            if (!"https".equalsIgnoreCase(uri.getScheme()) && !"localhost".equals(uri.getHost()) && !"127.0.0.1".equals(uri.getHost())) {
-                super.validateUrl(name, url);
-            }
-        }
+    public static class TestQuery extends Query {
     }
 
     @Test

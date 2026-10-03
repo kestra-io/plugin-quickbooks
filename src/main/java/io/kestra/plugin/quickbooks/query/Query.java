@@ -12,7 +12,6 @@ import io.kestra.core.serializers.FileSerde;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.core.http.HttpRequest;
 import io.kestra.core.http.client.HttpClient;
-import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.plugin.quickbooks.AbstractQuickBooksConnection;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -32,7 +31,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static io.kestra.core.utils.Rethrow.throwConsumer;
 
 @SuperBuilder
 @ToString
@@ -51,8 +49,8 @@ import static io.kestra.core.utils.Rethrow.throwConsumer;
                   - id: open_invoices
                     type: io.kestra.plugin.quickbooks.query.Query
                     clientId: "{{ secret('QBO_CLIENT_ID') }}"
-                    clientSecret: "{{ secret('QBO_CLIENT_SECRET') }}"
-                    refreshToken: "{{ secret('QBO_REFRESH_TOKEN') }}"
+                    clientSecret: "{{ secret('QUICKBOOKS_CLIENT_SECRET') }}"
+                    refreshToken: "{{ secret('QUICKBOOKS_REFRESH_TOKEN') }}"
                     realmId: "{{ secret('QBO_REALM_ID') }}"
                     query: "select * from Invoice where Balance > '0'"
                     fetchType: STORE
@@ -70,9 +68,9 @@ public class Query extends AbstractQuickBooksConnection implements RunnableTask<
         title = "The QBO Query Language statement",
         description = "Example: select * from Invoice where Balance > '0'"
     )
-    @PluginProperty(dynamic = true, group = "main")
+    @PluginProperty(group = "main")
     @NotNull
-    private Property<String> query;
+    protected Property<String> query;
 
     @Schema(
         title = "The way to consume the results",
@@ -85,12 +83,17 @@ public class Query extends AbstractQuickBooksConnection implements RunnableTask<
 
     @Override
     public FetchOutput run(RunContext runContext) throws Exception {
-        String renderedQuery = runContext.render(this.query).as(String.class).orElseThrow();
+        String renderedQuery = runContext.render(this.query).as(String.class)
+            .orElseThrow(() -> new io.kestra.core.exceptions.IllegalVariableEvaluationException("query is required, set the 'query' property"));
+        return run(runContext, renderedQuery);
+    }
+
+    protected FetchOutput run(RunContext runContext, String renderedQuery) throws Exception {
         FetchType type = runContext.render(this.fetchType).as(FetchType.class).orElse(FetchType.STORE);
         String accessToken = this.getAccessToken(runContext);
-        String realmId = runContext.render(this.getRealmId()).as(String.class).orElseThrow();
-        String baseUrl = runContext.render(this.getBaseUrl()).as(String.class).orElseThrow();
-        Integer minorVersion = runContext.render(this.getMinorVersion()).as(Integer.class).orElseThrow();
+        String realmId = this.getValidatedRealmId(runContext);
+        String baseUrl = this.getValidatedBaseUrl(runContext);
+        Integer minorVersion = this.getValidatedMinorVersion(runContext);
 
         // Strip existing pagination if provided
         renderedQuery = renderedQuery.replaceAll("(?i)\\s+(startposition|maxresults)\\s+\\d+", "");
@@ -109,7 +112,7 @@ public class Query extends AbstractQuickBooksConnection implements RunnableTask<
         int totalRows = 0;
         boolean hasMore = true;
 
-        try (var client = HttpClient.builder().runContext(runContext).build()) {
+        try (var client = io.kestra.core.http.client.HttpClient.builder().runContext(runContext).build()) {
             while (hasMore) {
                 String pagedQuery = renderedQuery + " STARTPOSITION " + startPosition + " MAXRESULTS " + maxResults;
                 String uriStr = baseUrl + "/v3/company/" + realmId + "/query?minorversion=" + minorVersion + "&query=" + URLEncoder.encode(pagedQuery, StandardCharsets.UTF_8);
@@ -121,26 +124,7 @@ public class Query extends AbstractQuickBooksConnection implements RunnableTask<
                     .addHeader("Authorization", "Bearer " + accessToken)
                     .build();
 
-                String responseBody = null;
-                int maxRetries = 5;
-                int attempt = 0;
-                while (attempt < maxRetries) {
-                    try {
-                        responseBody = client.request(request, String.class).getBody();
-                        break;
-                    } catch (HttpClientResponseException e) {
-                        if (e.getResponse().getStatus().getCode() == 429) {
-                            attempt++;
-                            if (attempt >= maxRetries) {
-                                throw new RuntimeException("Rate limit exceeded and max retries reached.", e);
-                            }
-                            // Exponential backoff
-                            Thread.sleep((long) (Math.pow(2, attempt) * 1000));
-                        } else {
-                            throw new RuntimeException("QuickBooks API request failed: " + e.getMessage(), e);
-                        }
-                    }
-                }
+                String responseBody = sendWithBackoff(client, request);
 
                 Map<String, Object> responseMap = JacksonMapper.ofJson().readValue(responseBody, Map.class);
                 Map<String, Object> queryResponse = (Map<String, Object>) responseMap.get("QueryResponse");

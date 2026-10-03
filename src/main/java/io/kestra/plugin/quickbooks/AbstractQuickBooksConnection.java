@@ -113,12 +113,50 @@ public abstract class AbstractQuickBooksConnection extends Task {
     @Builder.Default
     protected Property<String> authUrl = Property.ofValue(DEFAULT_AUTH_URL);
 
-    void validateUrl(String name, String url) throws Exception {
-        var uri = URI.create(url);
-        if (!"https".equalsIgnoreCase(uri.getScheme())) {
+    // Visible for testing: loopback exception is strictly disabled in production
+    private static boolean allowLoopbackForTests = false;
+
+    public static void setAllowLoopbackForTests(boolean allow) {
+        allowLoopbackForTests = allow;
+    }
+
+    private static boolean isLoopbackAllowed() {
+        return allowLoopbackForTests || Boolean.getBoolean("kestra.plugins.quickbooks.allow-loopback");
+    }
+
+    private static boolean isLoopbackHost(String host) {
+        return host != null && (
+            host.equalsIgnoreCase("localhost")
+            || host.equals("127.0.0.1")
+            || host.equals("[::1]")
+            || host.equals("::1")
+        );
+    }
+
+    private void validateUrl(String name, String url) throws Exception {
+        URI uri;
+        try {
+            uri = URI.create(url);
+        } catch (Exception e) {
+            throw new IllegalArgumentException(name + " is not a valid URI: " + url, e);
+        }
+
+        var scheme = uri.getScheme();
+        var host = uri.getHost();
+
+        if (host == null) {
+            throw new IllegalArgumentException(name + " must include a valid host. Provided: " + url);
+        }
+
+        boolean isLoopback = isLoopbackAllowed() && isLoopbackHost(host);
+
+        if (!"https".equalsIgnoreCase(scheme) && !isLoopback) {
             throw new IllegalArgumentException(name + " must use HTTPS. Provided: " + url);
         }
-        if (uri.getHost() == null || (!uri.getHost().equals("intuit.com") && !uri.getHost().endsWith(".intuit.com"))) {
+
+        boolean isIntuitHost = host.equalsIgnoreCase("intuit.com") || host.toLowerCase().endsWith(".intuit.com");
+
+        if (!isIntuitHost && !isLoopback) {
             throw new IllegalArgumentException(name + " host must be an Intuit domain. Provided: " + url);
         }
     }
@@ -143,21 +181,51 @@ public abstract class AbstractQuickBooksConnection extends Task {
         return rMinorVersion;
     }
 
-    protected String getAccessToken(RunContext runContext) throws Exception {
+    protected String getValidatedRealmId(RunContext runContext) throws Exception {
         var rRealmId = runContext.render(realmId).as(String.class)
-            .orElseThrow(() -> new IllegalVariableEvaluationException("realmId is required"));
+            .orElseThrow(() -> new IllegalVariableEvaluationException("realmId is required, set the 'realmId' property"));
         if (!rRealmId.matches("^[0-9]+$")) {
-            throw new IllegalArgumentException("realmId must be numeric");
+            throw new IllegalArgumentException("realmId must be numeric. Provided: " + rRealmId);
         }
+        return rRealmId;
+    }
 
+    protected String sendWithBackoff(HttpClient client, HttpRequest request) throws Exception {
+        int maxRetries = 5;
+        int attempt = 0;
+        while (attempt < maxRetries) {
+            try {
+                return client.request(request, String.class).getBody();
+            } catch (HttpClientResponseException e) {
+                if (e.getResponse().getStatus().getCode() == 429) {
+                    attempt++;
+                    if (attempt >= maxRetries) {
+                        throw new RuntimeException("Rate limit exceeded and max retries reached.", e);
+                    }
+                    try {
+                        Thread.sleep((long) (Math.pow(2, attempt) * 1000));
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Thread interrupted during backoff", ie);
+                    }
+                } else {
+                    throw e;
+                }
+            }
+        }
+        throw new IllegalStateException("Exhausted retries without a response");
+    }
+
+    protected String getAccessToken(RunContext runContext) throws Exception {
+        var rRealmId = getValidatedRealmId(runContext);
         var rAuthUrl = getValidatedAuthUrl(runContext);
 
         var rClientId = runContext.render(clientId).as(String.class)
-            .orElseThrow(() -> new IllegalVariableEvaluationException("clientId is required"));
+            .orElseThrow(() -> new IllegalVariableEvaluationException("clientId is required, set the 'clientId' property"));
         var rClientSecret = runContext.render(clientSecret).as(String.class)
-            .orElseThrow(() -> new IllegalVariableEvaluationException("clientSecret is required"));
+            .orElseThrow(() -> new IllegalVariableEvaluationException("clientSecret is required, set the 'clientSecret' property"));
         var rRefreshToken = runContext.render(refreshToken).as(String.class)
-            .orElseThrow(() -> new IllegalVariableEvaluationException("refreshToken is required"));
+            .orElseThrow(() -> new IllegalVariableEvaluationException("refreshToken is required, set the 'refreshToken' property"));
 
         var seedHash = Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(rRefreshToken.getBytes(StandardCharsets.UTF_8)));
         var clientIdHash = Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(rClientId.getBytes(StandardCharsets.UTF_8)));
@@ -168,7 +236,24 @@ public abstract class AbstractQuickBooksConnection extends Task {
         var lock = REFRESH_LOCKS.computeIfAbsent(kvKey, k -> new java.util.concurrent.locks.ReentrantLock());
         lock.lock();
         try {
-            return getOrRefreshToken(runContext, kvStore, kvKey, rClientId, rClientSecret, rRefreshToken, seedHash, rAuthUrl, false);
+            var leaseKey = kvKey + "_lease";
+            
+            // Check if valid first so we don't grab lease unnecessarily
+            var state = readState(runContext, kvStore, kvKey);
+            if (state != null && seedHash.equals(state.getSeedHash()) && state.getExpiresAt() > Instant.now().getEpochSecond() + 60) {
+                return state.getAccessToken();
+            }
+
+            if (kvStore.getValue(leaseKey).isPresent()) {
+                throw new IllegalStateException("Another worker is currently rotating the QuickBooks token for this realm. Please configure task retries (e.g. 5 retries with 10s delay) to wait for the rotation to finish.");
+            }
+            
+            kvStore.put(leaseKey, new KVValueAndMetadata(new io.kestra.core.storages.kv.KVMetadata(null, java.time.Duration.ofSeconds(30)), "locked"));
+            try {
+                return getOrRefreshToken(runContext, kvStore, kvKey, rClientId, rClientSecret, rRefreshToken, seedHash, rAuthUrl, false);
+            } finally {
+                kvStore.delete(leaseKey);
+            }
         } finally {
             lock.unlock();
         }
@@ -198,7 +283,7 @@ public abstract class AbstractQuickBooksConnection extends Task {
         var authHeader = "Basic " + Base64.getEncoder().encodeToString((rClientId + ":" + rClientSecret).getBytes(StandardCharsets.UTF_8));
         var body = "grant_type=refresh_token&refresh_token=" + URLEncoder.encode(activeRefreshToken, StandardCharsets.UTF_8);
 
-        try (var client = HttpClient.builder().runContext(runContext).build()) {
+        try (var client = io.kestra.core.http.client.HttpClient.builder().runContext(runContext).build()) {
             var request = HttpRequest.builder()
                 .uri(URI.create(rAuthUrl))
                 .method("POST")

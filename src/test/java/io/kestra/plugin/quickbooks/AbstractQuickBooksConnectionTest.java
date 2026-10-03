@@ -41,16 +41,22 @@ class AbstractQuickBooksConnectionTest {
     private RunContextFactory runContextFactory;
 
     private static WireMockServer wireMockServer;
+    
+    public static String getWireMockBaseUrl() {
+        return wireMockServer.baseUrl();
+    }
 
     @BeforeAll
     static void setup() {
-        wireMockServer = new WireMockServer(WireMockConfiguration.options().dynamicPort());
-        wireMockServer.start();
+        AbstractQuickBooksConnection.setAllowLoopbackForTests(true);
+        wireMockServer = new WireMockServer(WireMockConfiguration.options().dynamicPort().enableBrowserProxying(true));
+        wireMockServer.start(); System.setProperty("http.proxyHost", "127.0.0.1"); System.setProperty("http.proxyPort", String.valueOf(wireMockServer.port())); System.setProperty("https.proxyHost", "127.0.0.1"); System.setProperty("https.proxyPort", String.valueOf(wireMockServer.port()));
         WireMock.configureFor("localhost", wireMockServer.port());
     }
 
     @AfterAll
     static void teardown() {
+        AbstractQuickBooksConnection.setAllowLoopbackForTests(false);
         wireMockServer.stop();
     }
 
@@ -58,13 +64,7 @@ class AbstractQuickBooksConnectionTest {
     @Getter
     @NoArgsConstructor
     public static class QuickBooksTestTask extends AbstractQuickBooksConnection {
-        @Override
-        protected void validateUrl(String name, String url) throws Exception {
-            var uri = java.net.URI.create(url);
-            if (!"https".equalsIgnoreCase(uri.getScheme()) && !"localhost".equals(uri.getHost()) && !"127.0.0.1".equals(uri.getHost())) {
-                super.validateUrl(name, url);
-            }
-        }
+
     }
 
     private String getRandomRealmId() {
@@ -81,8 +81,7 @@ class AbstractQuickBooksConnectionTest {
             .clientId(Property.ofValue("test_client"))
             .clientSecret(Property.ofValue("test_secret"))
             .refreshToken(Property.ofValue("initial_refresh_token"))
-            .realmId(Property.ofValue(realmId))
-            .authUrl(Property.ofValue(wireMockServer.baseUrl() + "/oauth2/v1/tokens/bearer"));
+            .realmId(Property.ofValue(realmId)).authUrl(Property.ofValue(wireMockServer.baseUrl() + "/oauth2/v1/tokens/bearer"));
     }
 
 
@@ -207,6 +206,49 @@ class AbstractQuickBooksConnectionTest {
     }
 
     @Test
+    void testUrlSecurityValidation() {
+        var runContext = getRunContext();
+
+        // 1. Bypass attempts with localhost/127.0.0.1 in query parameters or user info
+        var taskHttpQueryLocalhost = getBaseBuilder("123").baseUrl(Property.ofValue("http://api.intuit.com/?localhost")).build();
+        assertThrows(IllegalArgumentException.class, () -> taskHttpQueryLocalhost.getValidatedBaseUrl(runContext));
+
+        var taskHttpQuery127 = getBaseBuilder("123").baseUrl(Property.ofValue("http://api.intuit.com/?127.0.0.1")).build();
+        assertThrows(IllegalArgumentException.class, () -> taskHttpQuery127.getValidatedBaseUrl(runContext));
+
+        var taskHttpQueryEvil = getBaseBuilder("123").baseUrl(Property.ofValue("http://evil.com/?localhost")).build();
+        assertThrows(IllegalArgumentException.class, () -> taskHttpQueryEvil.getValidatedBaseUrl(runContext));
+
+        // 2. Subdomain impersonation and evil domain attempts
+        var taskEvilSubdomain = getBaseBuilder("123").baseUrl(Property.ofValue("https://intuit.com.evil.com")).build();
+        assertThrows(IllegalArgumentException.class, () -> taskEvilSubdomain.getValidatedBaseUrl(runContext));
+
+        var taskUserInfoEvil = getBaseBuilder("123").baseUrl(Property.ofValue("https://intuit.com@evil.com")).build();
+        assertThrows(IllegalArgumentException.class, () -> taskUserInfoEvil.getValidatedBaseUrl(runContext));
+
+        // 3. Strict production rejection of loopback addresses when loopback is disabled
+        AbstractQuickBooksConnection.setAllowLoopbackForTests(false);
+        System.clearProperty("kestra.plugins.quickbooks.allow-loopback");
+        try {
+            var taskLoopbackHttp = getBaseBuilder("123").baseUrl(Property.ofValue("http://localhost:8080")).build();
+            assertThrows(IllegalArgumentException.class, () -> taskLoopbackHttp.getValidatedBaseUrl(runContext));
+
+            var taskLoopbackHttps = getBaseBuilder("123").baseUrl(Property.ofValue("https://localhost:8080")).build();
+            assertThrows(IllegalArgumentException.class, () -> taskLoopbackHttps.getValidatedBaseUrl(runContext));
+
+            var taskIpHttp = getBaseBuilder("123").baseUrl(Property.ofValue("http://127.0.0.1:8080")).build();
+            assertThrows(IllegalArgumentException.class, () -> taskIpHttp.getValidatedBaseUrl(runContext));
+
+            var taskIpHttps = getBaseBuilder("123").baseUrl(Property.ofValue("https://127.0.0.1:8080")).build();
+            assertThrows(IllegalArgumentException.class, () -> taskIpHttps.getValidatedBaseUrl(runContext));
+        } finally {
+            // Restore test mode
+            AbstractQuickBooksConnection.setAllowLoopbackForTests(true);
+            System.setProperty("kestra.plugins.quickbooks.allow-loopback", "true");
+        }
+    }
+
+    @Test
     void testGetAccessTokenCorruptedState() throws Exception {
         wireMockServer.resetAll();
         stubFor(post(urlEqualTo("/oauth2/v1/tokens/bearer"))
@@ -266,14 +308,6 @@ class AbstractQuickBooksConnectionTest {
     @NoArgsConstructor
     public static class QuickBooksConcurrencyTestTask extends AbstractQuickBooksConnection {
         private String injectedRotatedToken;
-        
-        @Override
-        protected void validateUrl(String name, String url) throws Exception {
-            var uri = java.net.URI.create(url);
-            if (!"https".equalsIgnoreCase(uri.getScheme()) && !"localhost".equals(uri.getHost()) && !"127.0.0.1".equals(uri.getHost())) {
-                super.validateUrl(name, url);
-            }
-        }
 
         @Override
         protected TokenResponse performRefresh(RunContext runContext, String rAuthUrl, String rClientId, String rClientSecret, String activeRefreshToken) throws Exception {
@@ -313,9 +347,7 @@ class AbstractQuickBooksConnectionTest {
             .clientId(Property.ofValue("test_client"))
             .clientSecret(Property.ofValue("test_secret"))
             .refreshToken(Property.ofValue("initial_refresh_token"))
-            .realmId(Property.ofValue(realmId))
-            .authUrl(Property.ofValue(wireMockServer.baseUrl() + "/oauth2/v1/tokens/bearer"))
-            .injectedRotatedToken("new_rotated_refresh")
+            .realmId(Property.ofValue(realmId)).authUrl(Property.ofValue(wireMockServer.baseUrl() + "/oauth2/v1/tokens/bearer")).injectedRotatedToken("new_rotated_refresh")
             .build();
             
         var runContext = getRunContext();
