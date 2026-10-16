@@ -1,0 +1,6 @@
+title: Query
+description: Run SQL-like queries against QuickBooks Online entities.
+pluginType: SUBGROUP
+group: io.kestra.plugin.quickbooks.query
+name: Query
+body: "Contains the generic Query task."
