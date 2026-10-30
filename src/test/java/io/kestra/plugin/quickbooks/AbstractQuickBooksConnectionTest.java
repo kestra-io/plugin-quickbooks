@@ -228,7 +228,6 @@ class AbstractQuickBooksConnectionTest {
 
         // 3. Strict production rejection of loopback addresses when loopback is disabled
         AbstractQuickBooksConnection.setAllowLoopbackForTests(false);
-        System.clearProperty("kestra.plugins.quickbooks.allow-loopback");
         try {
             var taskLoopbackHttp = getBaseBuilder("123").baseUrl(Property.ofValue("http://localhost:8080")).build();
             assertThrows(IllegalArgumentException.class, () -> taskLoopbackHttp.getValidatedBaseUrl(runContext));
@@ -244,7 +243,6 @@ class AbstractQuickBooksConnectionTest {
         } finally {
             // Restore test mode
             AbstractQuickBooksConnection.setAllowLoopbackForTests(true);
-            System.setProperty("kestra.plugins.quickbooks.allow-loopback", "true");
         }
     }
 

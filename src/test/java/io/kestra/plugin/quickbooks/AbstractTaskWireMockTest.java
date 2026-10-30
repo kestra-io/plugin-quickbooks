@@ -23,6 +23,11 @@ public abstract class AbstractTaskWireMockTest {
 
     protected static WireMockServer wireMockServer;
 
+    // Lets tests in sub-packages reach the package-private seam.
+    public static void allowLoopback(boolean allow) {
+        AbstractQuickBooksConnection.setAllowLoopbackForTests(allow);
+    }
+
     @BeforeAll
     static void baseSetup() {
         AbstractQuickBooksConnection.setAllowLoopbackForTests(true);

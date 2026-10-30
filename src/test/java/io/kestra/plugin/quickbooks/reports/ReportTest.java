@@ -29,7 +29,7 @@ public class ReportTest {
 
     @BeforeAll
     static void setup() {
-        io.kestra.plugin.quickbooks.AbstractQuickBooksConnection.setAllowLoopbackForTests(true);
+        io.kestra.plugin.quickbooks.AbstractTaskWireMockTest.allowLoopback(true);
         wireMockServer = new WireMockServer(WireMockConfiguration.options().dynamicPort());
         wireMockServer.start();
         WireMock.configureFor("localhost", wireMockServer.port());

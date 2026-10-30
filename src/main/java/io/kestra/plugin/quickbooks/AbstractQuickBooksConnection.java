@@ -9,8 +9,6 @@ import java.time.Instant;
 import java.util.Base64;
 
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.Pattern;
 
 import io.kestra.core.exceptions.IllegalVariableEvaluationException;
 import io.kestra.core.http.HttpRequest;
@@ -78,11 +76,10 @@ public abstract class AbstractQuickBooksConnection extends Task {
 
     @Schema(
         title = "QuickBooks Realm ID",
-        description = "The Realm ID (Company ID) for the QuickBooks account"
+        description = "The Realm ID (Company ID) for the QuickBooks account. Digits only, checked after rendering."
     )
     @PluginProperty(group = "connection")
     @NotNull
-    @Pattern(regexp = "^[0-9]+$")
     protected Property<String> realmId;
 
     @Schema(
@@ -96,11 +93,10 @@ public abstract class AbstractQuickBooksConnection extends Task {
 
     @Schema(
         title = "Minor Version",
-        description = "The minor version of the QuickBooks API to use. Must be strictly positive.",
+        description = "The minor version of the QuickBooks API to use. Must be 1 or more, checked after rendering.",
         defaultValue = "75"
     )
     @PluginProperty(group = "connection")
-    @Min(1)
     @Builder.Default
     protected Property<Integer> minorVersion = Property.ofValue(DEFAULT_MINOR_VERSION);
 
@@ -113,15 +109,15 @@ public abstract class AbstractQuickBooksConnection extends Task {
     @Builder.Default
     protected Property<String> authUrl = Property.ofValue(DEFAULT_AUTH_URL);
 
-    // Visible for testing: loopback exception is strictly disabled in production
-    private static boolean allowLoopbackForTests = false;
+    // Test seam only: never enabled in production, there is no runtime switch.
+    private static volatile boolean allowLoopbackForTests = false;
 
-    public static void setAllowLoopbackForTests(boolean allow) {
+    static void setAllowLoopbackForTests(boolean allow) {
         allowLoopbackForTests = allow;
     }
 
     private static boolean isLoopbackAllowed() {
-        return allowLoopbackForTests || Boolean.getBoolean("kestra.plugins.quickbooks.allow-loopback");
+        return allowLoopbackForTests;
     }
 
     private static boolean isLoopbackHost(String host) {

@@ -102,7 +102,6 @@ dependencies {
  * Jacoco
  **********************************************************************************************************************/
 test {
-    systemProperty "kestra.plugins.quickbooks.allow-loopback", "true"
     finalizedBy jacocoTestReport
 }
 
