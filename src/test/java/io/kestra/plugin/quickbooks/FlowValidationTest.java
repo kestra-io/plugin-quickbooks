@@ -76,4 +76,46 @@ class FlowValidationTest {
 
         assertThat(modelValidator.isValid(flow).isPresent(), is(true));
     }
+
+    @Test
+    void triggerExamplesAreValid() {
+        var triggers = List.of(
+            io.kestra.plugin.quickbooks.trigger.CdcTrigger.class,
+            io.kestra.plugin.quickbooks.trigger.WebhookTrigger.class,
+            io.kestra.plugin.quickbooks.invoices.InvoiceTrigger.class,
+            io.kestra.plugin.quickbooks.invoices.OverdueInvoiceTrigger.class,
+            io.kestra.plugin.quickbooks.payments.PaymentReceivedTrigger.class
+        );
+
+        for (var triggerClass : triggers) {
+            for (Example example : triggerClass.getAnnotation(Plugin.class).examples()) {
+                var flow = YamlParser.parse(String.join("\n", example.code()), Flow.class);
+                assertThat(triggerClass.getName() + ": " + modelValidator.isValid(flow), modelValidator.isValid(flow).isEmpty(), is(true));
+            }
+        }
+    }
+
+    @Test
+    void invoiceTriggerAcceptsLowercaseEvent() {
+        var flow = YamlParser.parse("""
+            id: quickbooks_invoice_event
+            namespace: company.team
+
+            triggers:
+              - id: on_invoice
+                type: io.kestra.plugin.quickbooks.invoices.InvoiceTrigger
+                clientId: "cid"
+                clientSecret: "csec"
+                refreshToken: "rt"
+                realmId: "123456"
+                event: updated
+
+            tasks:
+              - id: log
+                type: io.kestra.plugin.core.log.Log
+                message: hi
+            """, Flow.class);
+
+        assertThat(modelValidator.isValid(flow).isEmpty(), is(true));
+    }
 }

@@ -54,3 +54,41 @@ tasks:
     query: "select * from Invoice where Balance > '0'"
     fetchType: STORE
 ```
+
+## Triggers
+
+Polling triggers keep their watermark (or the ids they already reported) in the namespace KV store and only update it once the execution has been built. A polling trigger starts at most one execution per evaluation, so the batch outputs (`invoices`, `payments`) are the way to process every change of a poll.
+
+### InvoiceTrigger (`io.kestra.plugin.quickbooks.invoices.InvoiceTrigger`)
+Polls Change Data Capture for `Invoice` changes. `event` is `CREATED`, `UPDATED` or `PAID` (case-insensitive). Outputs `invoice`, `invoices` and `count`.
+
+### PaymentReceivedTrigger (`io.kestra.plugin.quickbooks.payments.PaymentReceivedTrigger`)
+Polls Change Data Capture for new `Payment` records. Outputs `payment`, `linkedInvoices` (the invoices applied to the payment), `payments` and `count`.
+
+```yaml
+id: qbo_on_payment
+namespace: company.finance
+
+triggers:
+  - id: on_payment
+    type: io.kestra.plugin.quickbooks.payments.PaymentReceivedTrigger
+    clientId: "{{ secret('QBO_CLIENT_ID') }}"
+    clientSecret: "{{ secret('QBO_CLIENT_SECRET') }}"
+    refreshToken: "{{ secret('QBO_REFRESH_TOKEN') }}"
+    realmId: "{{ secret('QBO_REALM_ID') }}"
+    interval: PT10M
+
+tasks:
+  - id: log
+    type: io.kestra.plugin.core.log.Log
+    message: "Payment {{ trigger.payment.id }} applied to {{ trigger.linkedInvoices | length }} invoice(s)"
+```
+
+### OverdueInvoiceTrigger (`io.kestra.plugin.quickbooks.invoices.OverdueInvoiceTrigger`)
+Polls (daily by default) for invoices with `Balance > '0' AND DueDate < '<today>'`. `mode` is `BATCH` (one execution with all new overdue invoices) or `PER_INVOICE` (one invoice per execution, one execution per evaluation). An invoice is reported once while it stays overdue. Outputs `invoices`, `count` and `daysOverdue`.
+
+### WebhookTrigger (`io.kestra.plugin.quickbooks.trigger.WebhookTrigger`)
+Receives QuickBooks webhooks. Every request must carry a valid `intuit-signature` header, the base64 HMAC-SHA256 of the raw payload keyed with your `verifierToken`; otherwise the trigger answers `401` and starts nothing. Outputs `eventNotifications`.
+
+### CdcTrigger (`io.kestra.plugin.quickbooks.trigger.CdcTrigger`)
+Polls Change Data Capture for any list of entities and outputs the raw `cdcResponse`.
