@@ -17,6 +17,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
+import io.kestra.plugin.quickbooks.AbstractTaskWireMockTest;
+
 import java.util.Map;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
@@ -34,7 +36,7 @@ public class QueryTest {
 
     @BeforeAll
     static void setup() {
-        io.kestra.plugin.quickbooks.AbstractTaskWireMockTest.allowLoopback(true);
+        AbstractTaskWireMockTest.allowLoopback(true);
         wireMockServer = new WireMockServer(WireMockConfiguration.options().dynamicPort());
         wireMockServer.start();
         WireMock.configureFor("localhost", wireMockServer.port());

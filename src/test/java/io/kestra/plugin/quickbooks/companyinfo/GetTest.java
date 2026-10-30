@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import io.kestra.plugin.quickbooks.AbstractTaskWireMockTest;
+
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -29,7 +31,7 @@ public class GetTest {
 
     @BeforeAll
     static void setup() {
-        io.kestra.plugin.quickbooks.AbstractTaskWireMockTest.allowLoopback(true);
+        AbstractTaskWireMockTest.allowLoopback(true);
         wireMockServer = new WireMockServer(WireMockConfiguration.options().dynamicPort());
         wireMockServer.start();
         WireMock.configureFor("localhost", wireMockServer.port());
