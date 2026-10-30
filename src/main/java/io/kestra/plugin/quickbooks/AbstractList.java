@@ -4,7 +4,7 @@ import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.common.FetchOutput;
 import io.kestra.core.runners.RunContext;
-import io.kestra.plugin.quickbooks.query.Query;
+import io.kestra.plugin.quickbooks.query.AbstractQuery;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -17,7 +17,7 @@ import lombok.experimental.SuperBuilder;
 @EqualsAndHashCode
 @Getter
 @NoArgsConstructor
-public abstract class AbstractList extends Query {
+public abstract class AbstractList extends AbstractQuery {
 
     @Schema(
         title = "Optional WHERE clause to filter records",

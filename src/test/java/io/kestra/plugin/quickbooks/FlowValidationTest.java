@@ -1,11 +1,15 @@
 package io.kestra.plugin.quickbooks;
 
+import io.kestra.core.models.annotations.Example;
+import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.validations.ModelValidator;
 import io.kestra.core.serializers.YamlParser;
 import io.kestra.core.models.flows.Flow;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -33,5 +37,43 @@ class FlowValidationTest {
             """, Flow.class);
 
         assertThat(modelValidator.isValid(flow).isEmpty(), is(true));
+    }
+
+    @Test
+    void listExamplesAreValidWithoutQuery() {
+        var listTasks = List.of(
+            io.kestra.plugin.quickbooks.accounts.List.class,
+            io.kestra.plugin.quickbooks.bills.List.class,
+            io.kestra.plugin.quickbooks.customers.List.class,
+            io.kestra.plugin.quickbooks.invoices.List.class,
+            io.kestra.plugin.quickbooks.items.List.class,
+            io.kestra.plugin.quickbooks.payments.List.class,
+            io.kestra.plugin.quickbooks.vendors.List.class
+        );
+
+        for (var taskClass : listTasks) {
+            for (Example example : taskClass.getAnnotation(Plugin.class).examples()) {
+                var flow = YamlParser.parse(String.join("\n", example.code()), Flow.class);
+                assertThat(taskClass.getName() + ": " + modelValidator.isValid(flow), modelValidator.isValid(flow).isEmpty(), is(true));
+            }
+        }
+    }
+
+    @Test
+    void queryWithoutQueryIsRejected() {
+        var flow = YamlParser.parse("""
+            id: quickbooks_query_missing
+            namespace: company.team
+
+            tasks:
+              - id: q
+                type: io.kestra.plugin.quickbooks.query.Query
+                clientId: "cid"
+                clientSecret: "csec"
+                refreshToken: "rt"
+                realmId: "123456"
+            """, Flow.class);
+
+        assertThat(modelValidator.isValid(flow).isPresent(), is(true));
     }
 }
