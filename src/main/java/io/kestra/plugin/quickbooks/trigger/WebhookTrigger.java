@@ -128,14 +128,14 @@ public class WebhookTrigger extends AbstractWebhookTrigger implements TriggerOut
             return Mono.just(HttpResponse.of(HttpResponse.Status.NO_CONTENT));
         }
 
-        try {
-            context.webhookService().startExecution(maybeExecution.get());
-        } catch (Exception e) {
-            runContext.logger().error("Failed to start the execution for a QuickBooks webhook", e);
-            return Mono.just(HttpResponse.of(HttpResponse.Status.INTERNAL_SERVER_ERROR));
-        }
-
-        return Mono.just(HttpResponse.of(context.webhookService().executionResponse(maybeExecution.get())));
+        var execution = maybeExecution.get();
+        HttpResponse<?> accepted = HttpResponse.of(context.webhookService().executionResponse(execution));
+        return context.webhookService().startExecution(execution)
+            .then(Mono.<HttpResponse<?>>just(accepted))
+            .onErrorResume(e -> {
+                runContext.logger().error("Failed to start the execution for a QuickBooks webhook", e);
+                return Mono.<HttpResponse<?>>just(HttpResponse.of(HttpResponse.Status.INTERNAL_SERVER_ERROR));
+            });
     }
 
     private static byte[] rawBody(WebhookContext context) {

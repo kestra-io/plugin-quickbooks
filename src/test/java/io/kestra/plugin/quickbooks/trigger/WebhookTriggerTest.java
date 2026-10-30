@@ -6,6 +6,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -21,6 +22,7 @@ import io.kestra.plugin.core.trigger.WebhookContext;
 import io.kestra.plugin.quickbooks.AbstractTaskWireMockTest;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import reactor.core.publisher.Mono;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -38,6 +40,7 @@ class WebhookTriggerTest extends AbstractTaskWireMockTest {
         {"eventNotifications":[{"realmId":"12345","dataChangeEvent":{"entities":[{"name":"Invoice","id":"130","operation":"Create","lastUpdated":"2023-09-01T12:00:00Z"}]}}]}""";
 
     private final WebhookService webhookService = mock(WebhookService.class);
+    private final AtomicInteger subscriptions = new AtomicInteger();
     private final WebhookTrigger trigger = WebhookTrigger.builder()
         .id("qbo_webhook")
         .type(WebhookTrigger.class.getName())
@@ -56,6 +59,11 @@ class WebhookTriggerTest extends AbstractTaskWireMockTest {
         when(webhookService.runContext(any(Flow.class), any(io.kestra.core.models.triggers.AbstractTrigger.class))).thenReturn(runContext());
         when(webhookService.newExecution(any(), any(), any(), any(Output.class)))
             .thenReturn(Optional.of(Execution.builder().id("exec").namespace(flow.getNamespace()).flowId(flow.getId()).build()));
+        when(webhookService.startExecution(any()))
+            .thenReturn(Mono.defer(() -> {
+                subscriptions.incrementAndGet();
+                return Mono.empty();
+            }));
 
         var request = HttpRequest.builder()
             .uri(URI.create("http://localhost/api/v1/executions/webhook/ns/test-flow/a-secret-key" + path))
@@ -88,6 +96,7 @@ class WebhookTriggerTest extends AbstractTaskWireMockTest {
         var output = ArgumentCaptor.forClass(Output.class);
         verify(webhookService).newExecution(any(), any(), any(), output.capture());
         verify(webhookService).startExecution(any());
+        assertThat(subscriptions.get(), is(1));
 
         var notifications = ((WebhookTrigger.Output) output.getValue()).getEventNotifications();
         assertThat(notifications.size(), is(1));
@@ -103,6 +112,7 @@ class WebhookTriggerTest extends AbstractTaskWireMockTest {
         assertThat(response.getStatus().getCode(), is(401));
         verify(webhookService, never()).newExecution(any(), any(), any(), any(Output.class));
         verify(webhookService, never()).startExecution(any());
+        assertThat(subscriptions.get(), is(0));
     }
 
     @Test
@@ -135,6 +145,29 @@ class WebhookTriggerTest extends AbstractTaskWireMockTest {
 
         assertThat(response.getStatus().getCode(), is(400));
         verify(webhookService, never()).startExecution(any());
+    }
+
+    @Test
+    void failureToStartTheExecutionIsAnInternalServerError() throws Exception {
+        var flow = Flow.builder().id("test-flow").namespace("io.kestra.plugin.quickbooks.test").revision(1).build();
+        when(webhookService.runContext(any(Flow.class), any(io.kestra.core.models.triggers.AbstractTrigger.class))).thenReturn(runContext());
+        when(webhookService.newExecution(any(), any(), any(), any(Output.class)))
+            .thenReturn(Optional.of(Execution.builder().id("exec").namespace(flow.getNamespace()).flowId(flow.getId()).build()));
+        when(webhookService.startExecution(any())).thenReturn(Mono.error(new IllegalStateException("queue down")));
+
+        var request = HttpRequest.builder()
+            .uri(URI.create("http://localhost/api/v1/executions/webhook/ns/test-flow/a-secret-key"))
+            .method("POST")
+            .addHeader("intuit-signature", sign(PAYLOAD, TOKEN))
+            .body(HttpRequest.StringRequestBody.builder()
+                .content(PAYLOAD)
+                .contentType("application/json")
+                .charset(StandardCharsets.UTF_8)
+                .build())
+            .build();
+        var context = WebhookContext.builder().request(request).flow(flow).trigger(trigger).webhookService(webhookService).build();
+
+        assertThat(trigger.evaluate(context).block().getStatus().getCode(), is(500));
     }
 
     @Test
