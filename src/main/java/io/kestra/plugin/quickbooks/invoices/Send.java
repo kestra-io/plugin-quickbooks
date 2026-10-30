@@ -15,6 +15,8 @@ import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.JacksonMapper;
 import io.swagger.v3.oas.annotations.media.Schema;
+
+import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -65,7 +67,7 @@ public class Send extends AbstractInvoiceById implements RunnableTask<Send.Outpu
     public Output run(RunContext runContext) throws Exception {
         var rId = renderId(runContext);
         var rSendTo = sendTo != null ? runContext.render(sendTo).as(String.class).filter(v -> !v.isBlank()).orElse(null) : null;
-        var accessToken = getAccessToken(runContext);
+        var rAccessToken = getAccessToken(runContext);
 
         var url = invoiceUrl(runContext, rId, "/send") + "?minorversion=" + getValidatedMinorVersion(runContext);
         if (rSendTo != null) {
@@ -77,7 +79,7 @@ public class Send extends AbstractInvoiceById implements RunnableTask<Send.Outpu
             var request = HttpRequest.builder()
                 .uri(URI.create(url))
                 .method("POST")
-                .addHeader("Authorization", "Bearer " + accessToken)
+                .addHeader("Authorization", "Bearer " + rAccessToken)
                 .addHeader("Accept", "application/json")
                 .body(HttpRequest.ByteArrayRequestBody.builder()
                     .contentType("application/octet-stream")
@@ -86,7 +88,7 @@ public class Send extends AbstractInvoiceById implements RunnableTask<Send.Outpu
                 .build();
 
             var responseBody = sendWithBackoff(client, request);
-            Map<String, Object> response = JacksonMapper.ofJson().readValue(responseBody, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            var response = JacksonMapper.ofJson().readValue(responseBody, new TypeReference<Map<String, Object>>() {});
 
             @SuppressWarnings("unchecked")
             var invoice = response.get("Invoice") instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.<String, Object>of();

@@ -24,6 +24,7 @@ import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.models.triggers.TriggerOutput;
 import io.kestra.core.models.triggers.TriggerService;
 import io.kestra.core.serializers.JacksonMapper;
+import io.kestra.core.storages.kv.KVStore;
 import io.kestra.core.storages.kv.KVValueAndMetadata;
 import io.kestra.plugin.quickbooks.trigger.AbstractQuickBooksTrigger;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -131,7 +132,7 @@ public class OverdueInvoiceTrigger extends AbstractQuickBooksTrigger implements 
         var runContext = conditionContext.getRunContext();
         var rMode = runContext.render(this.mode).as(Mode.class).orElse(Mode.BATCH);
 
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        var today = LocalDate.now(ZoneOffset.UTC);
         var query = "select * from Invoice where Balance > '0' AND DueDate < '" + today + "' orderby DueDate";
 
         var overdue = new ArrayList<>(fetchRows(runContext, query));
@@ -140,9 +141,9 @@ public class OverdueInvoiceTrigger extends AbstractQuickBooksTrigger implements 
 
         var kvStore = runContext.namespaceKv(context.getNamespace());
         var kvKey = stateKey("quickbooks_overdue_trigger_", context);
-        Set<String> reported = readReported(kvStore.getValue(kvKey).map(val -> val.value().toString()));
+        var reported = readReported(kvStore.getValue(kvKey).map(val -> val.value().toString()));
 
-        Set<String> overdueIds = new LinkedHashSet<>();
+        var overdueIds = new LinkedHashSet<String>();
         var pending = new ArrayList<Map<String, Object>>();
         for (var invoice : overdue) {
             var id = invoice.get("Id");
@@ -156,7 +157,7 @@ public class OverdueInvoiceTrigger extends AbstractQuickBooksTrigger implements 
         }
 
         // Forget invoices that are no longer overdue (paid, voided, deleted) so the state stays bounded.
-        Set<String> stillReported = new LinkedHashSet<>(reported);
+        var stillReported = new LinkedHashSet<String>(reported);
         stillReported.retainAll(overdueIds);
 
         if (pending.isEmpty()) {
@@ -166,15 +167,15 @@ public class OverdueInvoiceTrigger extends AbstractQuickBooksTrigger implements 
             return Optional.empty();
         }
 
-        List<Map<String, Object>> selected = rMode == Mode.PER_INVOICE ? List.of(pending.get(0)) : pending;
-        int daysOverdue = (int) selected.stream()
+        var selected = rMode == Mode.PER_INVOICE ? List.of(pending.getFirst()) : pending;
+        var daysOverdue = (int) selected.stream()
             .mapToLong(invoice -> daysOverdue(invoice, today))
             .max()
             .orElse(0);
 
         runContext.logger().info("Found {} newly overdue invoice(s), reporting {}", pending.size(), selected.size());
 
-        Execution execution = TriggerService.generateExecution(this, conditionContext, context, Output.builder()
+        var execution = TriggerService.generateExecution(this, conditionContext, context, Output.builder()
             .invoices(selected)
             .count(selected.size())
             .daysOverdue(daysOverdue)
@@ -198,11 +199,11 @@ public class OverdueInvoiceTrigger extends AbstractQuickBooksTrigger implements 
         if (stored.isEmpty()) {
             return new LinkedHashSet<>();
         }
-        List<String> ids = JacksonMapper.ofJson().readValue(stored.get(), new TypeReference<List<String>>() {});
+        var ids = JacksonMapper.ofJson().readValue(stored.get(), new TypeReference<List<String>>() {});
         return new LinkedHashSet<>(ids);
     }
 
-    private static void writeReported(io.kestra.core.storages.kv.KVStore kvStore, String key, Set<String> ids) throws Exception {
+    private static void writeReported(KVStore kvStore, String key, Set<String> ids) throws Exception {
         kvStore.put(key, new KVValueAndMetadata(null, JacksonMapper.ofJson().writeValueAsString(new ArrayList<>(ids))));
     }
 

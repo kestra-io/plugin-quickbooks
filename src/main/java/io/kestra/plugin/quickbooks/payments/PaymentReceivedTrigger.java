@@ -91,8 +91,8 @@ public class PaymentReceivedTrigger extends AbstractQuickBooksTrigger implements
 
         var kvStore = runContext.namespaceKv(context.getNamespace());
         var kvKey = stateKey("quickbooks_payment_trigger_", context);
-        ZonedDateTime changedSince = readWatermark(kvStore, kvKey, context);
-        ZonedDateTime pollStartTime = ZonedDateTime.now();
+        var changedSince = readWatermark(kvStore, kvKey, context);
+        var pollStartTime = ZonedDateTime.now();
 
         var payments = new ArrayList<Map<String, Object>>();
         for (var payment : changedEntities(fetchChanges(runContext, List.of(ENTITY), changedSince), ENTITY)) {
@@ -116,8 +116,8 @@ public class PaymentReceivedTrigger extends AbstractQuickBooksTrigger implements
 
         runContext.logger().info("Found {} new payment(s)", payments.size());
 
-        var first = payments.get(0);
-        Execution execution = TriggerService.generateExecution(this, conditionContext, context, Output.builder()
+        var first = payments.getFirst();
+        var execution = TriggerService.generateExecution(this, conditionContext, context, Output.builder()
             .payment(first)
             .linkedInvoices(linkedInvoices(first))
             .payments(payments)

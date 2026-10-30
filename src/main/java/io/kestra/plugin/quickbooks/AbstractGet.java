@@ -41,28 +41,28 @@ public abstract class AbstractGet extends AbstractQuickBooksConnection implement
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        String accessToken = this.getAccessToken(runContext);
-        String rRealmId = this.getValidatedRealmId(runContext);
-        String baseUrl = this.getValidatedBaseUrl(runContext);
-        Integer minorVersion = this.getValidatedMinorVersion(runContext);
+        var rAccessToken = this.getAccessToken(runContext);
+        var rRealmId = this.getValidatedRealmId(runContext);
+        var rBaseUrl = this.getValidatedBaseUrl(runContext);
+        var rMinorVersion = this.getValidatedMinorVersion(runContext);
 
-        String rEntityId = runContext.render(this.entityId).as(String.class)
+        var rEntityId = runContext.render(this.entityId).as(String.class)
             .orElseThrow(() -> new IllegalVariableEvaluationException("entityId is required, set the 'entityId' property"));
 
-        String endpoint = baseUrl + "/v3/company/" + rRealmId + "/" + entityPath() + "/"
-            + URLEncoder.encode(rEntityId, StandardCharsets.UTF_8) + "?minorversion=" + minorVersion;
+        var endpoint = rBaseUrl + "/v3/company/" + rRealmId + "/" + entityPath() + "/"
+            + URLEncoder.encode(rEntityId, StandardCharsets.UTF_8) + "?minorversion=" + rMinorVersion;
 
         try (HttpClient client = HttpClient.builder().runContext(runContext).build()) {
-            HttpRequest request = HttpRequest.builder()
+            var request = HttpRequest.builder()
                 .uri(URI.create(endpoint))
                 .method("GET")
-                .addHeader("Authorization", "Bearer " + accessToken)
+                .addHeader("Authorization", "Bearer " + rAccessToken)
                 .addHeader("Accept", "application/json")
                 .build();
 
-            String responseBody = sendWithBackoff(client, request);
+            var responseBody = sendWithBackoff(client, request);
 
-            Map<String, Object> responseMap = JacksonMapper.ofJson().readValue(responseBody, new TypeReference<Map<String, Object>>() {});
+            var responseMap = JacksonMapper.ofJson().readValue(responseBody, new TypeReference<Map<String, Object>>() {});
 
             return Output.builder()
                 .row(responseMap)

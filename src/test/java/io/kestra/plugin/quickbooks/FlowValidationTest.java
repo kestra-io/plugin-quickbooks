@@ -164,4 +164,68 @@ class FlowValidationTest {
 
         assertThat(modelValidator.isValid(flow).isEmpty(), is(true));
     }
+
+    @Test
+    void reportsRunIssueExampleIsValid() {
+        var flow = YamlParser.parse("""
+            id: qbo_profit_and_loss
+            namespace: company.finance
+
+            tasks:
+              - id: pnl
+                type: io.kestra.plugin.quickbooks.reports.Run
+                clientId: "{{ secret('QBO_CLIENT_ID') }}"
+                clientSecret: "{{ secret('QBO_CLIENT_SECRET') }}"
+                refreshToken: "{{ secret('QBO_REFRESH_TOKEN') }}"
+                realmId: "{{ secret('QBO_REALM_ID') }}"
+                report: ProfitAndLoss
+                startDate: "2026-01-01"
+                endDate: "2026-03-31"
+            """, Flow.class);
+
+        assertThat(modelValidator.isValid(flow).isEmpty(), is(true));
+    }
+
+    @Test
+    void reportsRunAcceptsAllTypedProperties() {
+        var flow = YamlParser.parse("""
+            id: qbo_report_all
+            namespace: company.team
+
+            tasks:
+              - id: report
+                type: io.kestra.plugin.quickbooks.reports.Run
+                clientId: "cid"
+                clientSecret: "csec"
+                refreshToken: "rt"
+                realmId: "123456"
+                report: agedreceivables
+                startDate: "2026-01-01"
+                endDate: "2026-03-31"
+                summarizeColumnBy: Month
+                customer: "58"
+                accountingMethod: accrual
+                parameters:
+                  department: "1"
+            """, Flow.class);
+
+        assertThat(modelValidator.isValid(flow).isEmpty(), is(true));
+    }
+
+    @Test
+    void reportAndChangesExamplesAreValid() {
+        var tasks = List.of(
+            io.kestra.plugin.quickbooks.reports.Run.class,
+            io.kestra.plugin.quickbooks.query.Changes.class,
+            io.kestra.plugin.quickbooks.query.Query.class,
+            io.kestra.plugin.quickbooks.companyinfo.Get.class
+        );
+
+        for (var taskClass : tasks) {
+            for (Example example : taskClass.getAnnotation(Plugin.class).examples()) {
+                var flow = YamlParser.parse(String.join("\n", example.code()), Flow.class);
+                assertThat(taskClass.getName() + ": " + modelValidator.isValid(flow), modelValidator.isValid(flow).isEmpty(), is(true));
+            }
+        }
+    }
 }

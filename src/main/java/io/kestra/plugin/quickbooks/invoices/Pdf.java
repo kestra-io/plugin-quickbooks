@@ -54,14 +54,14 @@ public class Pdf extends AbstractInvoiceById implements RunnableTask<Pdf.Output>
     @Override
     public Output run(RunContext runContext) throws Exception {
         var rId = renderId(runContext);
-        var accessToken = getAccessToken(runContext);
+        var rAccessToken = getAccessToken(runContext);
         var url = invoiceUrl(runContext, rId, "/pdf") + "?minorversion=" + getValidatedMinorVersion(runContext);
 
         try (HttpClient client = HttpClient.builder().runContext(runContext).build()) {
             var request = HttpRequest.builder()
                 .uri(URI.create(url))
                 .method("GET")
-                .addHeader("Authorization", "Bearer " + accessToken)
+                .addHeader("Authorization", "Bearer " + rAccessToken)
                 .addHeader("Accept", "application/pdf")
                 .build();
 

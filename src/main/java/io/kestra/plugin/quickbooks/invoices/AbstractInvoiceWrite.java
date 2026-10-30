@@ -2,6 +2,7 @@ package io.kestra.plugin.quickbooks.invoices;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import jakarta.validation.constraints.NotNull;
@@ -55,7 +56,7 @@ public abstract class AbstractInvoiceWrite extends AbstractQuickBooksConnection 
         }
         var body = body(runContext, rInvoice);
 
-        var accessToken = getAccessToken(runContext);
+        var rAccessToken = getAccessToken(runContext);
         var url = getValidatedBaseUrl(runContext) + "/v3/company/" + getValidatedRealmId(runContext)
             + "/invoice?minorversion=" + getValidatedMinorVersion(runContext);
 
@@ -63,17 +64,17 @@ public abstract class AbstractInvoiceWrite extends AbstractQuickBooksConnection 
             var request = HttpRequest.builder()
                 .uri(URI.create(url))
                 .method("POST")
-                .addHeader("Authorization", "Bearer " + accessToken)
+                .addHeader("Authorization", "Bearer " + rAccessToken)
                 .addHeader("Accept", "application/json")
                 .body(HttpRequest.StringRequestBody.builder()
                     .content(JacksonMapper.ofJson().writeValueAsString(body))
                     .contentType("application/json")
-                    .charset(java.nio.charset.StandardCharsets.UTF_8)
+                    .charset(StandardCharsets.UTF_8)
                     .build())
                 .build();
 
             var responseBody = sendWithBackoff(client, request);
-            Map<String, Object> response = JacksonMapper.ofJson().readValue(responseBody, new TypeReference<Map<String, Object>>() {});
+            var response = JacksonMapper.ofJson().readValue(responseBody, new TypeReference<Map<String, Object>>() {});
 
             @SuppressWarnings("unchecked")
             var row = response.get("Invoice") instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.<String, Object>of();

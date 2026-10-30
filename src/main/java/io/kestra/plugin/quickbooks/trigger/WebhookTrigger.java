@@ -89,8 +89,8 @@ public class WebhookTrigger extends AbstractWebhookTrigger implements TriggerOut
         }
 
         var runContext = context.webhookService().runContext(context.flow(), this);
-        var token = runContext.render(this.verifierToken).as(String.class).orElse(null);
-        if (token == null || token.isBlank()) {
+        var rToken = runContext.render(this.verifierToken).as(String.class).orElse(null);
+        if (rToken == null || rToken.isBlank()) {
             runContext.logger().error("The verifierToken of the QuickBooks webhook trigger is empty, rejecting the request");
             return Mono.just(HttpResponse.of(HttpResponse.Status.INTERNAL_SERVER_ERROR));
         }
@@ -100,7 +100,7 @@ public class WebhookTrigger extends AbstractWebhookTrigger implements TriggerOut
             ? Optional.<String>empty()
             : context.request().getHeaders().firstValue(SIGNATURE_HEADER);
 
-        if (signature.isEmpty() || !isValidSignature(body, token, signature.get())) {
+        if (signature.isEmpty() || !isValidSignature(body, rToken, signature.get())) {
             runContext.logger().warn("Rejected a QuickBooks webhook request with a missing or invalid {} header", SIGNATURE_HEADER);
             return Mono.just(HttpResponse.of(HttpResponse.Status.UNAUTHORIZED));
         }
@@ -116,7 +116,7 @@ public class WebhookTrigger extends AbstractWebhookTrigger implements TriggerOut
             return Mono.just(HttpResponse.of(HttpResponse.Status.BAD_REQUEST));
         }
 
-        Optional<Execution> maybeExecution = context.webhookService().newExecution(
+        var maybeExecution = context.webhookService().newExecution(
             context,
             context.flow(),
             this,

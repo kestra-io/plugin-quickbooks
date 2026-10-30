@@ -109,8 +109,8 @@ public class InvoiceTrigger extends AbstractQuickBooksTrigger implements Trigger
 
         var kvStore = runContext.namespaceKv(context.getNamespace());
         var kvKey = stateKey("quickbooks_invoice_trigger_", context);
-        ZonedDateTime changedSince = readWatermark(kvStore, kvKey, context);
-        ZonedDateTime pollStartTime = ZonedDateTime.now();
+        var changedSince = readWatermark(kvStore, kvKey, context);
+        var pollStartTime = ZonedDateTime.now();
 
         var matching = new ArrayList<Map<String, Object>>();
         for (var invoice : changedEntities(fetchChanges(runContext, List.of(ENTITY), changedSince), ENTITY)) {
@@ -130,8 +130,8 @@ public class InvoiceTrigger extends AbstractQuickBooksTrigger implements Trigger
 
         runContext.logger().info("Found {} invoice(s) matching event {}", matching.size(), rEvent);
 
-        Execution execution = TriggerService.generateExecution(this, conditionContext, context, Output.builder()
-            .invoice(matching.get(0))
+        var execution = TriggerService.generateExecution(this, conditionContext, context, Output.builder()
+            .invoice(matching.getFirst())
             .invoices(matching)
             .count(matching.size())
             .build());
@@ -146,7 +146,7 @@ public class InvoiceTrigger extends AbstractQuickBooksTrigger implements Trigger
             return false;
         }
         var created = metaTime(invoice, "CreateTime");
-        boolean createdInWindow = created == null || !created.toInstant().isBefore(changedSince.toInstant());
+        var createdInWindow = created == null || !created.toInstant().isBefore(changedSince.toInstant());
 
         return switch (event) {
             case CREATED -> createdInWindow;

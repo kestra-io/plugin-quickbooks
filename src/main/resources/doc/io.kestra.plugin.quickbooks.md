@@ -55,6 +55,33 @@ tasks:
     fetchType: STORE
 ```
 
+### Changes (`io.kestra.plugin.quickbooks.query.Changes`)
+Reads the Change Data Capture endpoint for `entities` changed since `changedSince` (QuickBooks keeps about 30 days of changes). Outputs `rows`, a map from each entity to its changed records (`id`, `status`, `deleted`), and the full `cdcResponse`.
+
+### Reports (`io.kestra.plugin.quickbooks.reports.Run`)
+Runs a report: `report` (case-insensitive: `AgedReceivables`, `AgedReceivableDetail`, `AgedPayables`, `ProfitAndLoss`, `BalanceSheet`, `GeneralLedger`, `CustomerBalance`, `TrialBalance` or `CashFlow`), plus optional `startDate`, `endDate`, `summarizeColumnBy`, `customer`, `accountingMethod` (`Cash` or `Accrual`) and a free `parameters` map for any other report parameter. Outputs the flattened `rows` (keyed by column title, with `section` and `type`) and the untouched `raw` response.
+
+```yaml
+id: qbo_profit_and_loss
+namespace: company.finance
+tasks:
+  - id: pnl
+    type: io.kestra.plugin.quickbooks.reports.Run
+    clientId: "{{ secret('QBO_CLIENT_ID') }}"
+    clientSecret: "{{ secret('QBO_CLIENT_SECRET') }}"
+    refreshToken: "{{ secret('QBO_REFRESH_TOKEN') }}"
+    realmId: "{{ secret('QBO_REALM_ID') }}"
+    report: ProfitAndLoss
+    startDate: "2026-01-01"
+    endDate: "2026-03-31"
+```
+
+### Customers, Payments, Bills, Vendors, Items, Accounts
+Each of these sub-packages has a `List` task (`fetchType`, optional `where` and `updatedSince`) and a `Get` task that fetches one record by `entityId`.
+
+### Company info (`io.kestra.plugin.quickbooks.companyinfo.Get`)
+Fetches the company information of the realm and outputs `row`.
+
 ### Invoices
 
 #### List (`io.kestra.plugin.quickbooks.invoices.List`)

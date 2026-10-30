@@ -3,7 +3,6 @@ package io.kestra.plugin.quickbooks.companyinfo;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.kestra.core.http.HttpRequest;
 import io.kestra.core.http.client.HttpClient;
-import io.kestra.core.http.client.HttpClientResponseException;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.tasks.RunnableTask;
@@ -53,25 +52,25 @@ public class Get extends AbstractQuickBooksConnection implements RunnableTask<Ge
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        var accessToken = this.getAccessToken(runContext);
-        var realmId = this.getValidatedRealmId(runContext);
-        var baseUrl = this.getValidatedBaseUrl(runContext);
-        var minorVersion = this.getValidatedMinorVersion(runContext);
+        var rAccessToken = this.getAccessToken(runContext);
+        var rRealmId = this.getValidatedRealmId(runContext);
+        var rBaseUrl = this.getValidatedBaseUrl(runContext);
+        var rMinorVersion = this.getValidatedMinorVersion(runContext);
 
-        var endpoint = baseUrl + "/v3/company/" + realmId + "/companyinfo/" + realmId + "?minorversion=" + minorVersion;
+        var endpoint = rBaseUrl + "/v3/company/" + rRealmId + "/companyinfo/" + rRealmId + "?minorversion=" + rMinorVersion;
 
         try (var client = HttpClient.builder().runContext(runContext).build()) {
             var request = HttpRequest.builder()
                 .uri(URI.create(endpoint))
                 .method("GET")
-                .addHeader("Authorization", "Bearer " + accessToken)
+                .addHeader("Authorization", "Bearer " + rAccessToken)
                 .addHeader("Accept", "application/json")
                 .build();
 
-            String responseBody = sendWithBackoff(client, request);
+            var responseBody = sendWithBackoff(client, request);
 
-            Map<String, Object> responseMap = JacksonMapper.ofJson().readValue(responseBody, new TypeReference<Map<String, Object>>() {});
-            Map<String, Object> companyInfo = (Map<String, Object>) responseMap.get("CompanyInfo");
+            var responseMap = JacksonMapper.ofJson().readValue(responseBody, new TypeReference<Map<String, Object>>() {});
+            var companyInfo = (Map<String, Object>) responseMap.get("CompanyInfo");
 
             return Output.builder()
                 .row(companyInfo)

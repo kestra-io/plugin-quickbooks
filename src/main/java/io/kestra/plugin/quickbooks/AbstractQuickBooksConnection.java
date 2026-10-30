@@ -7,6 +7,9 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 import jakarta.validation.constraints.NotNull;
 
@@ -44,7 +47,7 @@ public abstract class AbstractQuickBooksConnection extends Task {
     private static final String DEFAULT_BASE_URL = "https://quickbooks.api.intuit.com";
     private static final String DEFAULT_AUTH_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
     private static final Integer DEFAULT_MINOR_VERSION = 75;
-    private static final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.locks.ReentrantLock> REFRESH_LOCKS = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, ReentrantLock> REFRESH_LOCKS = new ConcurrentHashMap<>();
 
 
     @Schema(
@@ -144,13 +147,13 @@ public abstract class AbstractQuickBooksConnection extends Task {
             throw new IllegalArgumentException(name + " must include a valid host. Provided: " + url);
         }
 
-        boolean isLoopback = isLoopbackAllowed() && isLoopbackHost(host);
+        var isLoopback = isLoopbackAllowed() && isLoopbackHost(host);
 
         if (!"https".equalsIgnoreCase(scheme) && !isLoopback) {
             throw new IllegalArgumentException(name + " must use HTTPS. Provided: " + url);
         }
 
-        boolean isIntuitHost = host.equalsIgnoreCase("intuit.com") || host.toLowerCase().endsWith(".intuit.com");
+        var isIntuitHost = host.equalsIgnoreCase("intuit.com") || host.toLowerCase().endsWith(".intuit.com");
 
         if (!isIntuitHost && !isLoopback) {
             throw new IllegalArgumentException(name + " host must be an Intuit domain. Provided: " + url);
@@ -194,9 +197,9 @@ public abstract class AbstractQuickBooksConnection extends Task {
      * Runs the call and retries with an exponential backoff when QuickBooks answers 429. A throttled
      * request was not processed, so retrying it is safe for write calls too.
      */
-    protected <T> T withBackoff(java.util.concurrent.Callable<T> call) throws Exception {
-        int maxRetries = 5;
-        int attempt = 0;
+    protected <T> T withBackoff(Callable<T> call) throws Exception {
+        var maxRetries = 5;
+        var attempt = 0;
         while (attempt < maxRetries) {
             try {
                 return call.call();
@@ -237,7 +240,7 @@ public abstract class AbstractQuickBooksConnection extends Task {
         var kvStore = runContext.namespaceKv(runContext.flowInfo().namespace());
         var kvKey = "quickbooks_oauth_" + rRealmId + "_" + clientIdHash;
 
-        var lock = REFRESH_LOCKS.computeIfAbsent(kvKey, k -> new java.util.concurrent.locks.ReentrantLock());
+        var lock = REFRESH_LOCKS.computeIfAbsent(kvKey, k -> new ReentrantLock());
         lock.lock();
         try {
             var leaseKey = kvKey + "_lease";
@@ -252,7 +255,7 @@ public abstract class AbstractQuickBooksConnection extends Task {
                 throw new IllegalStateException("Another worker is currently rotating the QuickBooks token for this realm. Please configure task retries (e.g. 5 retries with 10s delay) to wait for the rotation to finish.");
             }
             
-            kvStore.put(leaseKey, new KVValueAndMetadata(new io.kestra.core.storages.kv.KVMetadata(null, java.time.Duration.ofSeconds(30)), "locked"));
+            kvStore.put(leaseKey, new KVValueAndMetadata(new KVMetadata(null, Duration.ofSeconds(30)), "locked"));
             try {
                 return getOrRefreshToken(runContext, kvStore, kvKey, rClientId, rClientSecret, rRefreshToken, seedHash, rAuthUrl, false);
             } finally {
@@ -287,7 +290,7 @@ public abstract class AbstractQuickBooksConnection extends Task {
         var authHeader = "Basic " + Base64.getEncoder().encodeToString((rClientId + ":" + rClientSecret).getBytes(StandardCharsets.UTF_8));
         var body = "grant_type=refresh_token&refresh_token=" + URLEncoder.encode(activeRefreshToken, StandardCharsets.UTF_8);
 
-        try (var client = io.kestra.core.http.client.HttpClient.builder().runContext(runContext).build()) {
+        try (var client = HttpClient.builder().runContext(runContext).build()) {
             var request = HttpRequest.builder()
                 .uri(URI.create(rAuthUrl))
                 .method("POST")
@@ -351,7 +354,7 @@ public abstract class AbstractQuickBooksConnection extends Task {
             }
         }
 
-        boolean isSeedToken = activeRefreshToken.equals(rRefreshToken);
+        var isSeedToken = activeRefreshToken.equals(rRefreshToken);
         if (isSeedToken && state != null) {
             runContext.logger().info("KV entry has expired and the seed token is used. The seed token may be stale.");
         }
@@ -362,21 +365,21 @@ public abstract class AbstractQuickBooksConnection extends Task {
         } catch (IllegalStateException e) {
             throw e;
         } catch (HttpClientResponseException e) {
-            String bodyStr = e.getMessage() != null ? e.getMessage() : "";
+            var bodyStr = e.getMessage() != null ? e.getMessage() : "";
             if (!isRetry && e.getResponse().getStatus().getCode() == 400 && bodyStr.contains("invalid_grant")) {
-                OAuthState freshState = readState(runContext, kvStore, kvKey);
+                var freshState = readState(runContext, kvStore, kvKey);
                 if (freshState != null && freshState.getRefreshToken() != null && !freshState.getRefreshToken().equals(activeRefreshToken)) {
                     return getOrRefreshToken(runContext, kvStore, kvKey, rClientId, rClientSecret, rRefreshToken, seedHash, rAuthUrl, true);
                 }
             }
-            String staleMsg = isSeedToken ? " Your seed refresh token may be stale." : "";
+            var staleMsg = isSeedToken ? " Your seed refresh token may be stale." : "";
             if (e.getResponse().getStatus().getCode() == 400 || e.getResponse().getStatus().getCode() == 401) {
                 throw new IllegalStateException("Intuit OAuth2 refresh failed with status " + e.getResponse().getStatus().getCode() + "." + staleMsg + " Please re-authenticate and provide a new refresh token.", e);
             } else {
                 throw new IllegalStateException("Intuit OAuth2 refresh failed with transient status " + e.getResponse().getStatus().getCode() + ". Please retry later.", e);
             }
         } catch (Exception e) {
-            String staleMsg = isSeedToken ? " Your seed refresh token may be stale." : "";
+            var staleMsg = isSeedToken ? " Your seed refresh token may be stale." : "";
             throw new IllegalStateException("Intuit OAuth2 refresh failed." + staleMsg + " Please re-authenticate and provide a new refresh token.", e);
         }
 

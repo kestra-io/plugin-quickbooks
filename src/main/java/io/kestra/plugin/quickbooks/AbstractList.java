@@ -58,7 +58,7 @@ public abstract class AbstractList extends AbstractQuery {
     public FetchOutput run(RunContext runContext) throws Exception {
         var all = new ArrayList<String>();
 
-        String rWhere = this.where != null ? runContext.render(this.where).as(String.class).orElse(null) : null;
+        var rWhere = this.where != null ? runContext.render(this.where).as(String.class).orElse(null) : null;
         if (rWhere != null && !rWhere.isBlank()) {
             all.add(rWhere);
         }
@@ -70,7 +70,7 @@ public abstract class AbstractList extends AbstractQuery {
 
         all.addAll(conditions(runContext));
 
-        String queryStr = "select * from " + entityName();
+        var queryStr = "select * from " + entityName();
         if (!all.isEmpty()) {
             queryStr += " where " + String.join(" AND ", all);
         }
