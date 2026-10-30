@@ -55,6 +55,38 @@ tasks:
     fetchType: STORE
 ```
 
+### Invoices
+
+#### List (`io.kestra.plugin.quickbooks.invoices.List`)
+Builds `select * from Invoice where ...` from typed filters, all combined with `AND` and with the optional raw `where`: `customerId`, `status` (`open`, `overdue` or `paid`), `dueBefore`, `dueAfter`, `txnDateFrom`, `txnDateTo`, `balanceMin` and `updatedSince`. String values are escaped (backslash and single quote), dates and amounts are typed, so a filter cannot change the rest of the query. `fetchType` works as on `Query`. Every `List` task also accepts `updatedSince` (`MetaData.LastUpdatedTime >=`).
+
+```yaml
+id: qbo_overdue_invoices
+namespace: company.finance
+tasks:
+  - id: overdue
+    type: io.kestra.plugin.quickbooks.invoices.List
+    clientId: "{{ secret('QBO_CLIENT_ID') }}"
+    clientSecret: "{{ secret('QBO_CLIENT_SECRET') }}"
+    refreshToken: "{{ secret('QBO_REFRESH_TOKEN') }}"
+    realmId: "{{ secret('QBO_REALM_ID') }}"
+    status: overdue
+    balanceMin: 100
+    fetchType: STORE
+```
+
+#### Send (`io.kestra.plugin.quickbooks.invoices.Send`)
+Emails an invoice (`invoiceId`, optional `sendTo`) and outputs `emailStatus`. The customer receives a real email.
+
+#### Pdf (`io.kestra.plugin.quickbooks.invoices.Pdf`)
+Downloads the invoice PDF (`invoiceId`) to internal storage and outputs `uri` and `size`. The body is streamed to disk, not held in memory.
+
+#### Create and Update (`io.kestra.plugin.quickbooks.invoices.Create`, `io.kestra.plugin.quickbooks.invoices.Update`)
+> [!WARNING]
+> These tasks write to your QuickBooks company. They are not behind any feature flag yet.
+
+`Create` posts the `invoice` body. `Update` needs `invoiceId`, `syncToken` and the `invoice` fields to change (`sparse` defaults to `true`; with `false` QuickBooks replaces the whole invoice). Both output `row`, `id`, `syncToken` and `totalAmt`.
+
 ## Triggers
 
 Polling triggers keep their watermark (or the ids they already reported) in the namespace KV store and only update it once the execution has been built. A polling trigger starts at most one execution per evaluation, so the batch outputs (`invoices`, `payments`) are the way to process every change of a poll.

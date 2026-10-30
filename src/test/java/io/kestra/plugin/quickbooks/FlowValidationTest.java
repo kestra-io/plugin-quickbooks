@@ -60,6 +60,52 @@ class FlowValidationTest {
     }
 
     @Test
+    void invoiceTaskExamplesAreValid() {
+        var tasks = List.of(
+            io.kestra.plugin.quickbooks.invoices.List.class,
+            io.kestra.plugin.quickbooks.invoices.Send.class,
+            io.kestra.plugin.quickbooks.invoices.Pdf.class,
+            io.kestra.plugin.quickbooks.invoices.Create.class,
+            io.kestra.plugin.quickbooks.invoices.Update.class
+        );
+
+        for (var taskClass : tasks) {
+            for (Example example : taskClass.getAnnotation(Plugin.class).examples()) {
+                var flow = YamlParser.parse(String.join("\n", example.code()), Flow.class);
+                assertThat(taskClass.getName() + ": " + modelValidator.isValid(flow), modelValidator.isValid(flow).isEmpty(), is(true));
+            }
+        }
+    }
+
+    @Test
+    void invoiceListWithAllFiltersIsValid() {
+        var flow = YamlParser.parse("""
+            id: quickbooks_invoice_filters
+            namespace: company.team
+
+            tasks:
+              - id: list
+                type: io.kestra.plugin.quickbooks.invoices.List
+                clientId: "cid"
+                clientSecret: "csec"
+                refreshToken: "rt"
+                realmId: "123456"
+                customerId: "58"
+                status: open
+                dueBefore: "2026-03-01"
+                dueAfter: "2026-02-01"
+                txnDateFrom: "2026-01-01"
+                txnDateTo: "2026-01-31"
+                balanceMin: 10.5
+                updatedSince: "2026-01-01T00:00:00Z"
+                where: "Terms = '1'"
+                fetchType: FETCH
+            """, Flow.class);
+
+        assertThat(modelValidator.isValid(flow).isEmpty(), is(true));
+    }
+
+    @Test
     void queryWithoutQueryIsRejected() {
         var flow = YamlParser.parse("""
             id: quickbooks_query_missing

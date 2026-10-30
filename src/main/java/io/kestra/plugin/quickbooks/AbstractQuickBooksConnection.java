@@ -187,11 +187,19 @@ public abstract class AbstractQuickBooksConnection extends Task {
     }
 
     protected String sendWithBackoff(HttpClient client, HttpRequest request) throws Exception {
+        return withBackoff(() -> client.request(request, String.class).getBody());
+    }
+
+    /**
+     * Runs the call and retries with an exponential backoff when QuickBooks answers 429. A throttled
+     * request was not processed, so retrying it is safe for write calls too.
+     */
+    protected <T> T withBackoff(java.util.concurrent.Callable<T> call) throws Exception {
         int maxRetries = 5;
         int attempt = 0;
         while (attempt < maxRetries) {
             try {
-                return client.request(request, String.class).getBody();
+                return call.call();
             } catch (HttpClientResponseException e) {
                 if (e.getResponse().getStatus().getCode() == 429) {
                     attempt++;

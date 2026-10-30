@@ -41,4 +41,27 @@ public class ListTest extends AbstractTaskWireMockTest {
         Map<String, Object> first = (Map<String, Object>) run.getRows().get(0);
         assertThat(first.get("Id"), is("1"));
     }
+
+    @Test
+    void updatedSinceIsAppliedThroughTheSharedList() throws Exception {
+        stubFor(get(urlPathEqualTo("/v3/company/12345/query"))
+            .withQueryParam("query", equalTo("select * from Customer where MetaData.LastUpdatedTime >= '2026-02-03T04:05:06Z' STARTPOSITION 1 MAXRESULTS 1000"))
+            .willReturn(aResponse()
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"QueryResponse\": {\"Customer\": [{\"Id\": \"1\"}]}}")));
+
+        var run = List.builder()
+            .clientId(Property.ofValue("client_id"))
+            .clientSecret(Property.ofValue("client_secret"))
+            .refreshToken(Property.ofValue("refresh_token"))
+            .realmId(Property.ofValue("12345"))
+            .baseUrl(Property.ofValue("http://localhost:" + wireMockServer.port()))
+            .authUrl(Property.ofValue("http://localhost:" + wireMockServer.port() + "/oauth2/v1/tokens/bearer"))
+            .fetchType(Property.ofValue(FetchType.FETCH))
+            .updatedSince(Property.ofValue(java.time.Instant.parse("2026-02-03T04:05:06Z")))
+            .build()
+            .run(runContext());
+
+        assertThat(run.getSize(), is(1L));
+    }
 }
