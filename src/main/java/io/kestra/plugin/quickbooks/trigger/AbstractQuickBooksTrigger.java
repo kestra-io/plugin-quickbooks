@@ -18,7 +18,7 @@ import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.storages.kv.KVStore;
 import io.kestra.core.storages.kv.KVValueAndMetadata;
-import io.kestra.plugin.quickbooks.cdc.Cdc;
+import io.kestra.plugin.quickbooks.query.Changes;
 import io.kestra.plugin.quickbooks.query.Query;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -32,7 +32,7 @@ import lombok.experimental.SuperBuilder;
 /**
  * Connection properties and polling helpers shared by the QuickBooks polling triggers.
  * A trigger cannot extend {@code AbstractQuickBooksConnection} (it is a Task), so the connection
- * properties are declared here and forwarded to the {@link Cdc} and {@link Query} tasks it reuses.
+ * properties are declared here and forwarded to the {@link Changes} and {@link Query} tasks it reuses.
  */
 @SuperBuilder
 @ToString
@@ -126,10 +126,10 @@ public abstract class AbstractQuickBooksTrigger extends AbstractTrigger implemen
         kvStore.put(key, new KVValueAndMetadata(null, watermark.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)));
     }
 
-    protected Cdc.Output fetchChanges(RunContext runContext, List<String> entities, ZonedDateTime changedSince) throws Exception {
-        return Cdc.builder()
+    protected Changes.Output fetchChanges(RunContext runContext, List<String> entities, ZonedDateTime changedSince) throws Exception {
+        return Changes.builder()
             .id(this.id)
-            .type(Cdc.class.getName())
+            .type(Changes.class.getName())
             .clientId(this.clientId)
             .clientSecret(this.clientSecret)
             .refreshToken(this.refreshToken)
@@ -162,7 +162,7 @@ public abstract class AbstractQuickBooksTrigger extends AbstractTrigger implemen
             .build()
             .run(runContext);
 
-        List<Map<String, Object>> rows = new ArrayList<>();
+        var rows = new ArrayList<Map<String, Object>>();
         if (output.getRows() != null) {
             for (Object row : output.getRows()) {
                 if (row instanceof Map<?, ?> map) {
@@ -175,34 +175,8 @@ public abstract class AbstractQuickBooksTrigger extends AbstractTrigger implemen
         return rows;
     }
 
-    /**
-     * Extracts the records of one entity from a CDC response:
-     * {@code CDCResponse[].QueryResponse[].<entity>[]}.
-     */
-    @SuppressWarnings("unchecked")
-    protected static List<Map<String, Object>> changedEntities(Cdc.Output output, String entity) {
-        List<Map<String, Object>> records = new ArrayList<>();
-        if (output == null || output.getCdcResponse() == null) {
-            return records;
-        }
-        if (!(output.getCdcResponse().get("CDCResponse") instanceof List<?> responses)) {
-            return records;
-        }
-        for (Object response : responses) {
-            if (!(response instanceof Map<?, ?> responseMap) || !(responseMap.get("QueryResponse") instanceof List<?> queryResponses)) {
-                continue;
-            }
-            for (Object queryResponse : queryResponses) {
-                if (queryResponse instanceof Map<?, ?> qr && qr.get(entity) instanceof List<?> list) {
-                    for (Object record : list) {
-                        if (record instanceof Map<?, ?> map) {
-                            records.add((Map<String, Object>) map);
-                        }
-                    }
-                }
-            }
-        }
-        return records;
+    protected static List<Map<String, Object>> changedEntities(Changes.Output output, String entity) {
+        return Changes.records(output == null ? null : output.getCdcResponse(), entity);
     }
 
     protected static boolean isDeleted(Map<String, Object> record) {

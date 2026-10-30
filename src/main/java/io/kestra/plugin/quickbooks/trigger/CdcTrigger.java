@@ -10,7 +10,7 @@ import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.models.triggers.TriggerOutput;
 import io.kestra.core.models.triggers.TriggerService;
 import io.kestra.core.runners.RunContext;
-import io.kestra.plugin.quickbooks.cdc.Cdc;
+import io.kestra.plugin.quickbooks.query.Changes;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -63,7 +63,7 @@ import java.util.Optional;
     title = "Trigger based on QuickBooks Change Data Capture (CDC)",
     description = "Periodically polls QuickBooks to fetch changed entities since the last successful poll."
 )
-public class CdcTrigger extends AbstractQuickBooksTrigger implements TriggerOutput<Cdc.Output> {
+public class CdcTrigger extends AbstractQuickBooksTrigger implements TriggerOutput<Changes.Output> {
 
     @Schema(
         title = "Entities",
@@ -87,25 +87,25 @@ public class CdcTrigger extends AbstractQuickBooksTrigger implements TriggerOutp
 
     @Override
     public Optional<Execution> evaluate(ConditionContext conditionContext, TriggerContext context) throws Exception {
-        RunContext runContext = conditionContext.getRunContext();
+        var runContext = conditionContext.getRunContext();
         
         var kvStore = runContext.namespaceKv(context.getNamespace());
         var kvKey = stateKey("quickbooks_cdc_", context);
-        ZonedDateTime changedSince = readWatermark(kvStore, kvKey, context);
+        var changedSince = readWatermark(kvStore, kvKey, context);
 
-        ZonedDateTime pollStartTime = ZonedDateTime.now();
+        var pollStartTime = ZonedDateTime.now();
 
         var output = fetchChanges(runContext, runContext.render(this.entities).asList(String.class), changedSince);
 
-        boolean hasChanges = false;
+        var hasChanges = false;
         var cdcResponse = output.getCdcResponse();
         if (cdcResponse != null) {
             try {
-                JsonNode rootNode = JacksonMapper.ofJson().valueToTree(cdcResponse);
-                JsonNode responses = rootNode.get("CDCResponse");
+                var rootNode = JacksonMapper.ofJson().valueToTree(cdcResponse);
+                var responses = rootNode.get("CDCResponse");
                 if (responses != null && responses.isArray()) {
                     for (JsonNode resp : responses) {
-                        JsonNode queryResponses = resp.get("QueryResponse");
+                        var queryResponses = resp.get("QueryResponse");
                         if (queryResponses != null && queryResponses.isArray()) {
                             for (JsonNode qResp : queryResponses) {
                                 if (!qResp.isEmpty()) {
@@ -124,7 +124,7 @@ public class CdcTrigger extends AbstractQuickBooksTrigger implements TriggerOutp
         writeWatermark(kvStore, kvKey, pollStartTime);
 
         if (hasChanges) {
-            Execution execution = TriggerService.generateExecution(this, conditionContext, context, output);
+            var execution = TriggerService.generateExecution(this, conditionContext, context, output);
             return Optional.of(execution);
         }
 
