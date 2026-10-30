@@ -3,7 +3,7 @@
 ## What
 
 - Provides plugin components under `io.kestra.plugin.quickbooks`.
-- Includes classes such as `Example`, `Trigger`.
+- Includes the base class `AbstractQuickBooksConnection`.
 
 ## Why
 
@@ -18,6 +18,10 @@
 Single-module plugin. Source packages under `io.kestra.plugin`:
 
 - `quickbooks`
+- `quickbooks.query` (`Query`, `Changes`)
+- `quickbooks.invoices`, `quickbooks.customers`, `quickbooks.payments`, `quickbooks.bills`, `quickbooks.vendors`, `quickbooks.items`, `quickbooks.accounts`, `quickbooks.companyinfo`
+- `quickbooks.reports` (`Run`)
+- `quickbooks.trigger` (`CdcTrigger`, `WebhookTrigger`)
 
 Infrastructure dependencies (Docker Compose services):
 
@@ -25,7 +29,9 @@ Infrastructure dependencies (Docker Compose services):
 
 ### Key Plugin Classes
 
-- `io.kestra.plugin.quickbooks.Example`
+- `io.kestra.plugin.quickbooks.AbstractQuickBooksConnection`
+- `io.kestra.plugin.quickbooks.query.Query`, `io.kestra.plugin.quickbooks.query.Changes`
+- `io.kestra.plugin.quickbooks.reports.Run`
 
 ### Project Structure
 

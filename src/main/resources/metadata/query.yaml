@@ -1,0 +1,6 @@
+title: Query
+description: Run SQL-like queries and read Change Data Capture changes of QuickBooks Online entities.
+pluginType: SUBGROUP
+group: io.kestra.plugin.quickbooks.query
+name: Query
+body: "Contains the Query task and the Changes task (Change Data Capture)."
