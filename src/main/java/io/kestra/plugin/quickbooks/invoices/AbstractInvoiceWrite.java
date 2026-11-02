@@ -2,6 +2,7 @@ package io.kestra.plugin.quickbooks.invoices;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
@@ -48,6 +49,13 @@ public abstract class AbstractInvoiceWrite extends AbstractQuickBooksConnection 
      */
     protected abstract Map<String, Object> body(RunContext runContext, Map<String, Object> rInvoice) throws Exception;
 
+    /**
+     * Value of the QuickBooks {@code requestid} idempotency query parameter, or null to send none.
+     */
+    protected String requestId(RunContext runContext) throws Exception {
+        return null;
+    }
+
     @Override
     public Output run(RunContext runContext) throws Exception {
         var rInvoice = runContext.render(invoice).asMap(String.class, Object.class);
@@ -59,8 +67,12 @@ public abstract class AbstractInvoiceWrite extends AbstractQuickBooksConnection 
         var rAccessToken = getAccessToken(runContext);
         var url = getValidatedBaseUrl(runContext) + "/v3/company/" + getValidatedRealmId(runContext)
             + "/invoice?minorversion=" + getValidatedMinorVersion(runContext);
+        var rRequestId = requestId(runContext);
+        if (rRequestId != null && !rRequestId.isBlank()) {
+            url += "&requestid=" + URLEncoder.encode(rRequestId, StandardCharsets.UTF_8);
+        }
 
-        try (HttpClient client = HttpClient.builder().runContext(runContext).build()) {
+        try (var client = HttpClient.builder().runContext(runContext).build()) {
             var request = HttpRequest.builder()
                 .uri(URI.create(url))
                 .method("POST")

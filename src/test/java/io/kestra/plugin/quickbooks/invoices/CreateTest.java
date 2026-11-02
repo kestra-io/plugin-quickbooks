@@ -14,6 +14,46 @@ import static org.hamcrest.Matchers.is;
 
 public class CreateTest extends AbstractTaskWireMockTest {
 
+    private Create.CreateBuilder<?, ?> builder() {
+        return Create.builder()
+            .clientId(Property.ofValue("client_id"))
+            .clientSecret(Property.ofValue("client_secret"))
+            .refreshToken(Property.ofValue("refresh_token"))
+            .realmId(Property.ofValue("12345"))
+            .baseUrl(Property.ofValue("http://localhost:" + wireMockServer.port()))
+            .authUrl(Property.ofValue("http://localhost:" + wireMockServer.port() + "/oauth2/v1/tokens/bearer"))
+            .invoice(Property.ofValue(Map.of(
+                "CustomerRef", Map.of("value", "58"),
+                "Line", List.of(Map.of("Amount", 150.0, "DetailType", "SalesItemLineDetail")))));
+    }
+
+    private static void stubCreate() {
+        stubFor(post(urlPathEqualTo("/v3/company/12345/invoice"))
+            .willReturn(aResponse()
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"Invoice\": {\"Id\": \"131\", \"SyncToken\": \"0\", \"TotalAmt\": 150.0}}")));
+    }
+
+    @Test
+    void requestIdIsSentAsTheIdempotencyKey() throws Exception {
+        stubCreate();
+
+        builder().requestId(Property.ofExpression("{{ 'exec-1' }}-abc def")).build().run(runContext());
+
+        verify(postRequestedFor(urlPathEqualTo("/v3/company/12345/invoice"))
+            .withQueryParam("requestid", equalTo("exec-1-abc def")));
+    }
+
+    @Test
+    void noRequestIdParameterByDefault() throws Exception {
+        stubCreate();
+
+        builder().build().run(runContext());
+
+        verify(postRequestedFor(urlPathEqualTo("/v3/company/12345/invoice"))
+            .withQueryParam("requestid", absent()));
+    }
+
     @Test
     void create() throws Exception {
         stubFor(post(urlPathEqualTo("/v3/company/12345/invoice"))
