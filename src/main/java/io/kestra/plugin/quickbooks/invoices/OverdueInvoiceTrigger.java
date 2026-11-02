@@ -18,7 +18,7 @@ import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.conditions.ConditionContext;
-import io.kestra.core.models.executions.Execution;
+import io.kestra.core.models.triggers.TriggerEvaluationResult;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.models.triggers.TriggerOutput;
@@ -129,7 +129,7 @@ public class OverdueInvoiceTrigger extends AbstractQuickBooksTrigger implements 
     }
 
     @Override
-    public Optional<Execution> evaluate(ConditionContext conditionContext, TriggerContext context) throws Exception {
+    public Optional<TriggerEvaluationResult> eval(ConditionContext conditionContext, TriggerContext context) throws Exception {
         var runContext = conditionContext.getRunContext();
         var rMode = runContext.render(this.mode).as(Mode.class).orElse(Mode.BATCH);
 
@@ -176,7 +176,7 @@ public class OverdueInvoiceTrigger extends AbstractQuickBooksTrigger implements 
 
         runContext.logger().info("Found {} newly overdue invoice(s), reporting {}", pending.size(), selected.size());
 
-        var execution = TriggerService.generateExecution(this, conditionContext, context, Output.builder()
+        var execution = TriggerService.generateEvaluationResult(this, conditionContext, Output.builder()
             .invoices(selected)
             .count(selected.size())
             .daysOverdue(daysOverdue)

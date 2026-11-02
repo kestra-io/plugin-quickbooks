@@ -91,7 +91,7 @@ class InvoiceTriggerTest extends AbstractTriggerWireMockTest {
                 message: hi
             """.formatted(baseUrl(), authUrl()), Flow.class);
 
-        var result = evaluate((InvoiceTrigger) flow.getTriggers().get(0), "invoices", SINCE);
+        var result = evaluate((InvoiceTrigger) flow.getTriggers().getFirst(), "invoices", SINCE);
 
         assertThat(result.isPresent(), is(true));
         assertThat(((Map<String, Object>) variables(result.get()).get("invoice")).get("Id"), is("2"));
@@ -108,7 +108,7 @@ class InvoiceTriggerTest extends AbstractTriggerWireMockTest {
         var cdcCalls = wireMockServer.findAll(getRequestedFor(urlPathEqualTo("/v3/company/12345/cdc")));
         assertThat(cdcCalls.size(), is(2));
         // The second poll starts from the first poll time, not from the trigger date again.
-        assertThat(cdcCalls.get(0).queryParameter("changedSince").firstValue(), is("2023-09-01T12:00:00Z"));
+        assertThat(cdcCalls.getFirst().queryParameter("changedSince").firstValue(), is("2023-09-01T12:00:00Z"));
         assertThat(cdcCalls.get(1).queryParameter("changedSince").firstValue(), not("2023-09-01T12:00:00Z"));
     }
 

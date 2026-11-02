@@ -91,8 +91,7 @@ public class WebhookTrigger extends AbstractWebhookTrigger implements TriggerOut
 
         var runContext = context.webhookService().runContext(context.flow(), this);
 
-        // With STORE or NONE the controller leaves the request body empty, so the signature could never match.
-        // Fail loudly with a 500 instead of answering 401 to every genuine Intuit delivery.
+        // With STORE or NONE the controller leaves the body empty so the signature never matches: fail with a 500 instead of a 401 on every genuine delivery.
         if (getFetchType() != null && getFetchType() != FetchType.FETCH) {
             runContext.logger().error("The QuickBooks webhook trigger requires fetchType FETCH to verify the intuit-signature, but it is {}. Remove the fetchType property or set it to FETCH", getFetchType());
             return Mono.just(HttpResponse.of(HttpResponse.Status.INTERNAL_SERVER_ERROR));

@@ -70,7 +70,7 @@ public class RunTest extends AbstractTaskWireMockTest {
         assertThat(run.getUri(), is(nullValue()));
         assertThat(run.getSize(), is(3L));
         assertThat(run.getRows().size(), is(3));
-        assertThat(run.getRows().get(0), is(Map.of("column1", "Services", "Total", "100.00", "section", "Income", "type", "Data")));
+        assertThat(run.getRows().getFirst(), is(Map.of("column1", "Services", "Total", "100.00", "section", "Income", "type", "Data")));
         assertThat(run.getRows().get(1), is(Map.of("column1", "Total Income", "Total", "100.00", "section", "", "type", "Summary")));
         assertThat(run.getRows().get(2).get("column1"), is("Net Income"));
     }
@@ -168,7 +168,7 @@ public class RunTest extends AbstractTaskWireMockTest {
         try (var in = runContext.storage().getFile(run.getUri())) {
             var rows = FileSerde.readAll(in, new TypeReference<Map<String, Object>>() {}).collectList().block();
             assertThat(rows.size(), is(3));
-            assertThat(rows.get(0).get("column1"), is("Services"));
+            assertThat(rows.getFirst().get("column1"), is("Services"));
         }
     }
 

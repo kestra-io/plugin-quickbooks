@@ -121,9 +121,9 @@ class WebhookTriggerTest extends AbstractTaskWireMockTest {
 
         var notifications = ((WebhookTrigger.Output) output.getValue()).getEventNotifications();
         assertThat(notifications.size(), is(1));
-        assertThat(notifications.get(0).get("realmId"), is("12345"));
-        var entities = (List<Map<String, Object>>) ((Map<String, Object>) notifications.get(0).get("dataChangeEvent")).get("entities");
-        assertThat(entities.get(0).get("id"), is("130"));
+        assertThat(notifications.getFirst().get("realmId"), is("12345"));
+        var entities = (List<Map<String, Object>>) ((Map<String, Object>) notifications.getFirst().get("dataChangeEvent")).get("entities");
+        assertThat(entities.getFirst().get("id"), is("130"));
     }
 
     @Test

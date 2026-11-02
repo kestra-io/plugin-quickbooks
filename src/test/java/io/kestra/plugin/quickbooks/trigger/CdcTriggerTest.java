@@ -2,7 +2,7 @@ package io.kestra.plugin.quickbooks.trigger;
 
 import io.kestra.core.runners.DefaultRunContext;
 import io.kestra.core.models.conditions.ConditionContext;
-import io.kestra.core.models.executions.Execution;
+import io.kestra.core.models.triggers.TriggerEvaluationResult;
 import io.kestra.core.models.flows.Flow;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.TriggerContext;
@@ -72,10 +72,11 @@ public class CdcTriggerTest extends AbstractTaskWireMockTest {
             .flow(flow)
             .build();
 
-        Optional<Execution> result = trigger.evaluate(conditionContext, triggerContext);
+        Optional<TriggerEvaluationResult> result = trigger.eval(conditionContext, triggerContext);
 
         assertThat(result.isPresent(), is(true));
-        Execution execution = result.get();
-        assertThat(execution.getFlowId(), is("test-flow"));
+        var execution = result.get();
+        assertThat(execution.executionId() != null, is(true));
+        assertThat(execution.flowRevision(), is(1));
     }
 }

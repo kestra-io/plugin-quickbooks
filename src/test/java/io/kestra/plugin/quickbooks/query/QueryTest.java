@@ -104,7 +104,7 @@ public class QueryTest {
         assertThat(run.getSize(), is(2L));
         assertThat(run.getRows().size(), is(2));
         
-        Map<String, Object> firstRow = (Map<String, Object>) run.getRows().get(0);
+        Map<String, Object> firstRow = (Map<String, Object>) run.getRows().getFirst();
         assertThat(firstRow.get("Id"), is("1"));
     }
 

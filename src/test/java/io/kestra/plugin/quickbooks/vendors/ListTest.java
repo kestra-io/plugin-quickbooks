@@ -38,7 +38,7 @@ public class ListTest extends AbstractTaskWireMockTest {
         assertThat(run, notNullValue());
         assertThat(run.getSize(), is(1L));
         assertThat(run.getRows().size(), is(1));
-        Map<String, Object> first = (Map<String, Object>) run.getRows().get(0);
+        Map<String, Object> first = (Map<String, Object>) run.getRows().getFirst();
         assertThat(first.get("Id"), is("1"));
     }
 }

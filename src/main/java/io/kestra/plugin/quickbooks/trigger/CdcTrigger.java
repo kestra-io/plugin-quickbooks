@@ -4,7 +4,7 @@ import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.conditions.ConditionContext;
-import io.kestra.core.models.executions.Execution;
+import io.kestra.core.models.triggers.TriggerEvaluationResult;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.models.triggers.TriggerOutput;
@@ -87,7 +87,7 @@ public class CdcTrigger extends AbstractQuickBooksTrigger implements TriggerOutp
     }
 
     @Override
-    public Optional<Execution> evaluate(ConditionContext conditionContext, TriggerContext context) throws Exception {
+    public Optional<TriggerEvaluationResult> eval(ConditionContext conditionContext, TriggerContext context) throws Exception {
         var runContext = conditionContext.getRunContext();
         
         var kvStore = runContext.namespaceKv(context.getNamespace());
@@ -125,7 +125,7 @@ public class CdcTrigger extends AbstractQuickBooksTrigger implements TriggerOutp
         writeWatermark(kvStore, kvKey, pollStartTime);
 
         if (hasChanges) {
-            var execution = TriggerService.generateExecution(this, conditionContext, context, output);
+            var execution = TriggerService.generateEvaluationResult(this, conditionContext, output);
             return Optional.of(execution);
         }
 

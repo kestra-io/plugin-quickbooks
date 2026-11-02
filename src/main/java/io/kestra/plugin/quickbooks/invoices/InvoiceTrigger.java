@@ -16,7 +16,7 @@ import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.conditions.ConditionContext;
-import io.kestra.core.models.executions.Execution;
+import io.kestra.core.models.triggers.TriggerEvaluationResult;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.models.triggers.TriggerOutput;
@@ -103,7 +103,7 @@ public class InvoiceTrigger extends AbstractQuickBooksTrigger implements Trigger
     }
 
     @Override
-    public Optional<Execution> evaluate(ConditionContext conditionContext, TriggerContext context) throws Exception {
+    public Optional<TriggerEvaluationResult> eval(ConditionContext conditionContext, TriggerContext context) throws Exception {
         var runContext = conditionContext.getRunContext();
         var rEvent = runContext.render(this.event).as(Event.class).orElse(Event.CREATED);
 
@@ -130,7 +130,7 @@ public class InvoiceTrigger extends AbstractQuickBooksTrigger implements Trigger
 
         runContext.logger().info("Found {} invoice(s) matching event {}", matching.size(), rEvent);
 
-        var execution = TriggerService.generateExecution(this, conditionContext, context, Output.builder()
+        var execution = TriggerService.generateEvaluationResult(this, conditionContext, Output.builder()
             .invoice(matching.getFirst())
             .invoices(matching)
             .count(matching.size())

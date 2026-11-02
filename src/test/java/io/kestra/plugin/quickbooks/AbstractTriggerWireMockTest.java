@@ -7,7 +7,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import io.kestra.core.models.conditions.ConditionContext;
-import io.kestra.core.models.executions.Execution;
+import io.kestra.core.models.triggers.TriggerEvaluationResult;
 import io.kestra.core.models.flows.Flow;
 import io.kestra.core.models.triggers.PollingTriggerInterface;
 import io.kestra.core.models.triggers.TriggerContext;
@@ -35,7 +35,7 @@ public abstract class AbstractTriggerWireMockTest extends AbstractTaskWireMockTe
         return baseUrl() + "/oauth2/v1/tokens/bearer";
     }
 
-    protected Optional<Execution> evaluate(PollingTriggerInterface trigger, String triggerId, ZonedDateTime date) throws Exception {
+    protected Optional<TriggerEvaluationResult> evaluate(PollingTriggerInterface trigger, String triggerId, ZonedDateTime date) throws Exception {
         var flow = Flow.builder().id(flowId).namespace(NAMESPACE).revision(1).build();
         var triggerContext = TriggerContext.builder()
             .tenantId("")
@@ -49,12 +49,12 @@ public abstract class AbstractTriggerWireMockTest extends AbstractTaskWireMockTe
         runContextFactory.initializer().forScheduler(runContext, triggerContext, (AbstractTrigger) trigger);
 
         var conditionContext = ConditionContext.builder().runContext(runContext).flow(flow).build();
-        return trigger.evaluate(conditionContext, triggerContext);
+        return trigger.eval(conditionContext, triggerContext);
     }
 
     @SuppressWarnings("unchecked")
-    protected static Map<String, Object> variables(Execution execution) {
-        return (Map<String, Object>) (Map<?, ?>) execution.getTrigger().getVariables();
+    protected static Map<String, Object> variables(TriggerEvaluationResult result) {
+        return (Map<String, Object>) (Map<?, ?>) result.trigger().getVariables();
     }
 
     protected static void stubJson(String path, String body) {

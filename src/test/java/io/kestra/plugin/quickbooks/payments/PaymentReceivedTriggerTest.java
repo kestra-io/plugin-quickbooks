@@ -69,7 +69,7 @@ class PaymentReceivedTriggerTest extends AbstractTriggerWireMockTest {
             .replace("interval: PT10M", "interval: PT10M\n    baseUrl: \"" + baseUrl() + "\"\n    authUrl: \"" + authUrl() + "\"");
         var flow = YamlParser.parse(code, Flow.class);
 
-        var result = evaluate((PaymentReceivedTrigger) flow.getTriggers().get(0), "on_payment", SINCE);
+        var result = evaluate((PaymentReceivedTrigger) flow.getTriggers().getFirst(), "on_payment", SINCE);
 
         assertThat(result.isPresent(), is(true));
         var message = runContext().render(

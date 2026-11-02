@@ -16,7 +16,7 @@ import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.conditions.ConditionContext;
-import io.kestra.core.models.executions.Execution;
+import io.kestra.core.models.triggers.TriggerEvaluationResult;
 import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.models.triggers.TriggerOutput;
 import io.kestra.core.models.triggers.TriggerService;
@@ -88,7 +88,7 @@ public class PaymentReceivedTrigger extends AbstractQuickBooksTrigger implements
     }
 
     @Override
-    public Optional<Execution> evaluate(ConditionContext conditionContext, TriggerContext context) throws Exception {
+    public Optional<TriggerEvaluationResult> eval(ConditionContext conditionContext, TriggerContext context) throws Exception {
         var runContext = conditionContext.getRunContext();
 
         var kvStore = runContext.namespaceKv(context.getNamespace());
@@ -119,7 +119,7 @@ public class PaymentReceivedTrigger extends AbstractQuickBooksTrigger implements
         runContext.logger().info("Found {} new payment(s)", payments.size());
 
         var first = payments.getFirst();
-        var execution = TriggerService.generateExecution(this, conditionContext, context, Output.builder()
+        var execution = TriggerService.generateEvaluationResult(this, conditionContext, Output.builder()
             .payment(first)
             .linkedInvoices(linkedInvoices(first))
             .payments(payments)

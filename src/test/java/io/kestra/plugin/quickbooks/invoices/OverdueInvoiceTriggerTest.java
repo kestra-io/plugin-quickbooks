@@ -88,10 +88,10 @@ class OverdueInvoiceTriggerTest extends AbstractTriggerWireMockTest {
         var first = evaluate(trigger, "overdue", DATE).orElseThrow();
         var second = evaluate(trigger, "overdue", DATE).orElseThrow();
 
-        assertThat(((List<Map<String, Object>>) variables(first).get("invoices")).get(0).get("Id"), is("2"));
+        assertThat(((List<Map<String, Object>>) variables(first).get("invoices")).getFirst().get("Id"), is("2"));
         assertThat(variables(first).get("count"), is(1));
         assertThat(variables(first).get("daysOverdue"), is(10));
-        assertThat(((List<Map<String, Object>>) variables(second).get("invoices")).get(0).get("Id"), is("1"));
+        assertThat(((List<Map<String, Object>>) variables(second).get("invoices")).getFirst().get("Id"), is("1"));
         assertThat(evaluate(trigger, "overdue", DATE).isEmpty(), is(true));
     }
 
@@ -120,7 +120,7 @@ class OverdueInvoiceTriggerTest extends AbstractTriggerWireMockTest {
                 message: hi
             """.formatted(baseUrl(), authUrl()), Flow.class);
 
-        var result = evaluate((OverdueInvoiceTrigger) flow.getTriggers().get(0), "overdue", DATE).orElseThrow();
+        var result = evaluate((OverdueInvoiceTrigger) flow.getTriggers().getFirst(), "overdue", DATE).orElseThrow();
 
         assertThat(variables(result).get("count"), is(1));
     }
