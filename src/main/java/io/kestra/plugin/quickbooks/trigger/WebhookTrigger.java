@@ -21,6 +21,7 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.TriggerOutput;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.core.trigger.AbstractWebhookTrigger;
+import io.kestra.plugin.core.trigger.AbstractWebhookTrigger.FetchType;
 import io.kestra.plugin.core.trigger.WebhookContext;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -66,7 +67,7 @@ import reactor.core.publisher.Mono;
     description = """
         Exposes a webhook URL `.../executions/webhook/{namespace}/{flowId}/{key}` to register in the Intuit developer portal. Every request is authenticated with the `intuit-signature` header, which must be the base64 HMAC-SHA256 of the raw request body keyed with the `verifierToken` of your webhook endpoint. A request with a missing or invalid signature gets a `401` and never starts an execution.
 
-        The `key` is part of the URL: keep it secret, for example with `{{ secret('...') }}`. Webhook payloads only describe what changed (entity name, id, operation); fetch the entity with the matching QuickBooks task. Responses: 200 (triggered), 204 (conditions not met), 400 (invalid payload), 401 (invalid signature), 404 (unexpected path)."""
+        The `key` is part of the URL: keep it secret, for example with `{{ secret('...') }}`. Webhook payloads only describe what changed (entity name, id, operation); fetch the entity with the matching QuickBooks task. The inherited `fetchType` must stay `FETCH` (the default): the signature is computed over the request body, which is not available with `STORE` or `NONE`, so such a trigger answers `500` and starts nothing. Responses: 200 (triggered), 204 (conditions not met), 400 (invalid payload), 401 (invalid signature), 404 (unexpected path)."""
 )
 public class WebhookTrigger extends AbstractWebhookTrigger implements TriggerOutput<WebhookTrigger.Output> {
     private static final String SIGNATURE_HEADER = "intuit-signature";
@@ -89,6 +90,14 @@ public class WebhookTrigger extends AbstractWebhookTrigger implements TriggerOut
         }
 
         var runContext = context.webhookService().runContext(context.flow(), this);
+
+        // With STORE or NONE the controller leaves the request body empty, so the signature could never match.
+        // Fail loudly with a 500 instead of answering 401 to every genuine Intuit delivery.
+        if (getFetchType() != null && getFetchType() != FetchType.FETCH) {
+            runContext.logger().error("The QuickBooks webhook trigger requires fetchType FETCH to verify the intuit-signature, but it is {}. Remove the fetchType property or set it to FETCH", getFetchType());
+            return Mono.just(HttpResponse.of(HttpResponse.Status.INTERNAL_SERVER_ERROR));
+        }
+
         var rToken = runContext.render(this.verifierToken).as(String.class).orElse(null);
         if (rToken == null || rToken.isBlank()) {
             runContext.logger().error("The verifierToken of the QuickBooks webhook trigger is empty, rejecting the request");

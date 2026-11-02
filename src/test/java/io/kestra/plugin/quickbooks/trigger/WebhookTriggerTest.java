@@ -16,8 +16,10 @@ import io.kestra.core.http.HttpResponse;
 import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.flows.Flow;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.triggers.AbstractTrigger;
 import io.kestra.core.models.tasks.Output;
 import io.kestra.core.services.WebhookService;
+import io.kestra.plugin.core.trigger.AbstractWebhookTrigger;
 import io.kestra.plugin.core.trigger.WebhookContext;
 import io.kestra.plugin.quickbooks.AbstractTaskWireMockTest;
 import org.junit.jupiter.api.Test;
@@ -54,9 +56,32 @@ class WebhookTriggerTest extends AbstractTaskWireMockTest {
         return Base64.getEncoder().encodeToString(mac.doFinal(payload.getBytes(StandardCharsets.UTF_8)));
     }
 
+    private static String signBytes(byte[] payload, String token) throws Exception {
+        var mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(token.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        return Base64.getEncoder().encodeToString(mac.doFinal(payload));
+    }
+
     private HttpResponse<?> call(String path, String body, String signature) throws Exception {
+        return call(trigger, path, HttpRequest.StringRequestBody.builder()
+            .content(body)
+            .contentType("application/json")
+            .charset(StandardCharsets.UTF_8)
+            .build(), signature);
+    }
+
+    // Production (Kestra FETCH path) hands the raw bytes over in a ByteArrayRequestBody.
+    private HttpResponse<?> callWithBytes(WebhookTrigger target, byte[] body, String signature) throws Exception {
+        return call(target, "", HttpRequest.ByteArrayRequestBody.builder()
+            .content(body)
+            .contentType("application/json")
+            .charset(StandardCharsets.UTF_8)
+            .build(), signature);
+    }
+
+    private HttpResponse<?> call(WebhookTrigger target, String path, HttpRequest.RequestBody body, String signature) throws Exception {
         var flow = Flow.builder().id("test-flow").namespace("io.kestra.plugin.quickbooks.test").revision(1).build();
-        when(webhookService.runContext(any(Flow.class), any(io.kestra.core.models.triggers.AbstractTrigger.class))).thenReturn(runContext());
+        when(webhookService.runContext(any(Flow.class), any(AbstractTrigger.class))).thenReturn(runContext());
         when(webhookService.newExecution(any(), any(), any(), any(Output.class)))
             .thenReturn(Optional.of(Execution.builder().id("exec").namespace(flow.getNamespace()).flowId(flow.getId()).build()));
         when(webhookService.startExecution(any()))
@@ -71,20 +96,16 @@ class WebhookTriggerTest extends AbstractTaskWireMockTest {
         if (signature != null) {
             request.addHeader("intuit-signature", signature);
         }
-        var built = request.body(HttpRequest.StringRequestBody.builder()
-            .content(body)
-            .contentType("application/json")
-            .charset(StandardCharsets.UTF_8)
-            .build()).build();
+        var built = request.body(body).build();
 
         var context = WebhookContext.builder()
             .request(built)
             .flow(flow)
-            .trigger(trigger)
+            .trigger(target)
             .webhookService(webhookService)
             .build();
 
-        return trigger.evaluate(context).block();
+        return target.evaluate(context).block();
     }
 
     @Test
@@ -103,6 +124,48 @@ class WebhookTriggerTest extends AbstractTaskWireMockTest {
         assertThat(notifications.get(0).get("realmId"), is("12345"));
         var entities = (List<Map<String, Object>>) ((Map<String, Object>) notifications.get(0).get("dataChangeEvent")).get("entities");
         assertThat(entities.get(0).get("id"), is("130"));
+    }
+
+    @Test
+    void validSignatureOverRawBytesStartsAnExecution() throws Exception {
+        // Non-ASCII content: a string re-encoding with another charset would change the bytes and break the HMAC.
+        var payload = PAYLOAD.replace("Invoice", "Invoicé").getBytes(StandardCharsets.UTF_8);
+        var signature = signBytes(payload, TOKEN);
+
+        var response = callWithBytes(trigger, payload, signature);
+
+        assertThat(response.getStatus().getCode(), is(200));
+        verify(webhookService).startExecution(any());
+        assertThat(subscriptions.get(), is(1));
+    }
+
+    @Test
+    void tamperedRawBytesAreRejected() throws Exception {
+        var signature = signBytes(PAYLOAD.getBytes(StandardCharsets.UTF_8), TOKEN);
+
+        var response = callWithBytes(trigger, PAYLOAD.replace("130", "131").getBytes(StandardCharsets.UTF_8), signature);
+
+        assertThat(response.getStatus().getCode(), is(401));
+        verify(webhookService, never()).startExecution(any());
+    }
+
+    @Test
+    void fetchTypeOtherThanFetchFailsLoudlyInsteadOfRejectingEveryDelivery() throws Exception {
+        for (var fetchType : List.of(AbstractWebhookTrigger.FetchType.STORE, AbstractWebhookTrigger.FetchType.NONE)) {
+            var misconfigured = WebhookTrigger.builder()
+                .id("qbo_webhook")
+                .type(WebhookTrigger.class.getName())
+                .key("a-secret-key")
+                .fetchType(fetchType)
+                .verifierToken(Property.ofValue(TOKEN))
+                .build();
+            var payload = PAYLOAD.getBytes(StandardCharsets.UTF_8);
+
+            var response = callWithBytes(misconfigured, payload, signBytes(payload, TOKEN));
+
+            assertThat(response.getStatus().getCode(), is(500));
+        }
+        verify(webhookService, never()).startExecution(any());
     }
 
     @Test
@@ -150,7 +213,7 @@ class WebhookTriggerTest extends AbstractTaskWireMockTest {
     @Test
     void failureToStartTheExecutionIsAnInternalServerError() throws Exception {
         var flow = Flow.builder().id("test-flow").namespace("io.kestra.plugin.quickbooks.test").revision(1).build();
-        when(webhookService.runContext(any(Flow.class), any(io.kestra.core.models.triggers.AbstractTrigger.class))).thenReturn(runContext());
+        when(webhookService.runContext(any(Flow.class), any(AbstractTrigger.class))).thenReturn(runContext());
         when(webhookService.newExecution(any(), any(), any(), any(Output.class)))
             .thenReturn(Optional.of(Execution.builder().id("exec").namespace(flow.getNamespace()).flowId(flow.getId()).build()));
         when(webhookService.startExecution(any())).thenReturn(Mono.error(new IllegalStateException("queue down")));
