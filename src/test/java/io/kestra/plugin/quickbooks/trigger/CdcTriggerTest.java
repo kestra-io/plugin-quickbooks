@@ -1,21 +1,22 @@
 package io.kestra.plugin.quickbooks.trigger;
 
-import io.kestra.core.runners.DefaultRunContext;
+import java.time.ZonedDateTime;
+import java.util.List;
+
 import io.kestra.core.models.conditions.ConditionContext;
-import io.kestra.core.models.triggers.TriggerEvaluationResult;
 import io.kestra.core.models.flows.Flow;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.TriggerContext;
+import io.kestra.core.models.triggers.TriggerEvaluationResult;
+import io.kestra.core.runners.DefaultRunContext;
 import io.kestra.plugin.quickbooks.AbstractTaskWireMockTest;
 import org.junit.jupiter.api.Test;
 
-import java.time.ZonedDateTime;
-import java.util.List;
-import java.util.Optional;
-
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
 
 public class CdcTriggerTest extends AbstractTaskWireMockTest {
 
@@ -72,11 +73,10 @@ public class CdcTriggerTest extends AbstractTaskWireMockTest {
             .flow(flow)
             .build();
 
-        Optional<TriggerEvaluationResult> result = trigger.eval(conditionContext, triggerContext);
+        var result = trigger.eval(conditionContext, triggerContext).orElseThrow();
 
-        assertThat(result.isPresent(), is(true));
-        var execution = result.get();
-        assertThat(execution.executionId() != null, is(true));
-        assertThat(execution.flowRevision(), is(1));
+        assertThat(result.executionId(), notNullValue());
+        assertThat(result.flowRevision(), is(1));
+        assertThat(result.trigger().getVariables(), hasKey("cdcResponse"));
     }
 }

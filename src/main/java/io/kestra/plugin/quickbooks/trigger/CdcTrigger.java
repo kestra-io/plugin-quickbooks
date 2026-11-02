@@ -1,15 +1,24 @@
 package io.kestra.plugin.quickbooks.trigger;
 
+import java.time.Duration;
+import java.time.ZonedDateTime;
+import java.util.List;
+import java.util.Optional;
+
+import jakarta.validation.constraints.NotNull;
+
+import com.fasterxml.jackson.databind.JsonNode;
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.conditions.ConditionContext;
-import io.kestra.core.models.triggers.TriggerEvaluationResult;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.TriggerContext;
+import io.kestra.core.models.triggers.TriggerEvaluationResult;
 import io.kestra.core.models.triggers.TriggerOutput;
 import io.kestra.core.models.triggers.TriggerService;
 import io.kestra.core.runners.RunContext;
+import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.quickbooks.query.Changes;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
@@ -18,14 +27,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import io.kestra.core.serializers.JacksonMapper;
-import jakarta.validation.constraints.NotNull;
-import java.time.Duration;
-import java.time.ZonedDateTime;
-import java.util.List;
-import java.util.Optional;
 
 @SuperBuilder
 @ToString

@@ -1,16 +1,16 @@
 package io.kestra.plugin.quickbooks;
 
-import io.kestra.core.models.triggers.AbstractTrigger;
 import java.time.ZonedDateTime;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import io.kestra.core.models.conditions.ConditionContext;
-import io.kestra.core.models.triggers.TriggerEvaluationResult;
 import io.kestra.core.models.flows.Flow;
+import io.kestra.core.models.triggers.AbstractTrigger;
 import io.kestra.core.models.triggers.PollingTriggerInterface;
 import io.kestra.core.models.triggers.TriggerContext;
+import io.kestra.core.models.triggers.TriggerEvaluationResult;
 import io.kestra.core.runners.DefaultRunContext;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
