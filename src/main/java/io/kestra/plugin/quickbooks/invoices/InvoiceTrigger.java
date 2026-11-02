@@ -52,7 +52,7 @@ import lombok.experimental.SuperBuilder;
                     clientSecret: "{{ secret('QBO_CLIENT_SECRET') }}"
                     refreshToken: "{{ secret('QBO_REFRESH_TOKEN') }}"
                     realmId: "{{ secret('QBO_REALM_ID') }}"
-                    event: paid
+                    event: PAID
                     interval: PT15M
 
                 tasks:
@@ -79,21 +79,21 @@ public class InvoiceTrigger extends AbstractQuickBooksTrigger implements Trigger
     @Schema(
         title = "Invoice event to react to",
         description = """
-            Supported values (case-insensitive):
-            - `created`: invoices created since the last poll.
-            - `updated`: invoices that already existed before the last poll and were modified since.
-            - `paid`: invoices changed since the last poll that have a zero balance and a positive total. QuickBooks CDC does not report what changed, so an already paid invoice that is edited again is reported again.""",
-        defaultValue = "created",
-        allowableValues = {"created", "updated", "paid"}
+            Supported values (uppercase, case-sensitive):
+            - `CREATED`: invoices created since the last poll.
+            - `UPDATED`: invoices that already existed before the last poll and were modified since.
+            - `PAID`: invoices changed since the last poll that have a zero balance and a positive total. QuickBooks CDC does not report what changed, so an already paid invoice that is edited again is reported again.""",
+        defaultValue = "CREATED"
     )
     @PluginProperty(group = "main")
     @Builder.Default
-    private Property<String> event = Property.ofValue("created");
+    private Property<Event> event = Property.ofValue(Event.CREATED);
 
     @Schema(
         title = "Polling interval",
         description = "How often the trigger should poll for changes."
     )
+    @PluginProperty(group = "execution")
     @Builder.Default
     private final Duration interval = Duration.ofMinutes(15);
 
@@ -105,7 +105,7 @@ public class InvoiceTrigger extends AbstractQuickBooksTrigger implements Trigger
     @Override
     public Optional<Execution> evaluate(ConditionContext conditionContext, TriggerContext context) throws Exception {
         var runContext = conditionContext.getRunContext();
-        var rEvent = Event.parse(runContext.render(this.event).as(String.class).orElse("created"));
+        var rEvent = runContext.render(this.event).as(Event.class).orElse(Event.CREATED);
 
         var kvStore = runContext.namespaceKv(context.getNamespace());
         var kvKey = stateKey("quickbooks_invoice_trigger_", context);
@@ -165,19 +165,10 @@ public class InvoiceTrigger extends AbstractQuickBooksTrigger implements Trigger
         }
     }
 
-    enum Event {
+    public enum Event {
         CREATED,
         UPDATED,
-        PAID;
-
-        static Event parse(String value) {
-            for (var event : values()) {
-                if (event.name().equalsIgnoreCase(value.trim())) {
-                    return event;
-                }
-            }
-            throw new IllegalArgumentException("event must be one of created, updated or paid. Provided: " + value);
-        }
+        PAID
     }
 
     @Builder

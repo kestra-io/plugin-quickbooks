@@ -47,7 +47,7 @@ class InvoiceTriggerTest extends AbstractTriggerWireMockTest {
     void createdReportsOnlyNewInvoices() throws Exception {
         stubJson("/v3/company/12345/cdc", CDC);
 
-        var result = evaluate(builder().event(Property.ofValue("created")).build(), "invoices", SINCE);
+        var result = evaluate(builder().event(Property.ofValue(InvoiceTrigger.Event.CREATED)).build(), "invoices", SINCE);
 
         assertThat(result.isPresent(), is(true));
         var variables = variables(result.get());
@@ -61,7 +61,7 @@ class InvoiceTriggerTest extends AbstractTriggerWireMockTest {
     void updatedSkipsInvoicesCreatedInTheWindowAndDeletedOnes() throws Exception {
         stubJson("/v3/company/12345/cdc", CDC);
 
-        var result = evaluate(builder().event(Property.ofValue("UPDATED")).build(), "invoices", SINCE);
+        var result = evaluate(builder().event(Property.ofValue(InvoiceTrigger.Event.UPDATED)).build(), "invoices", SINCE);
 
         assertThat(result.isPresent(), is(true));
         assertThat(((Map<String, Object>) variables(result.get()).get("invoice")).get("Id"), is("2"));
@@ -84,7 +84,7 @@ class InvoiceTriggerTest extends AbstractTriggerWireMockTest {
                 realmId: "12345"
                 baseUrl: "%s"
                 authUrl: "%s"
-                event: paid
+                event: PAID
             tasks:
               - id: log
                 type: io.kestra.plugin.core.log.Log

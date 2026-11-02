@@ -35,8 +35,8 @@ import lombok.experimental.SuperBuilder;
                   - id: list
                     type: io.kestra.plugin.quickbooks.invoices.List
                     clientId: "{{ secret('QBO_CLIENT_ID') }}"
-                    clientSecret: "{{ secret('QUICKBOOKS_CLIENT_SECRET') }}"
-                    refreshToken: "{{ secret('QUICKBOOKS_REFRESH_TOKEN') }}"
+                    clientSecret: "{{ secret('QBO_CLIENT_SECRET') }}"
+                    refreshToken: "{{ secret('QBO_REFRESH_TOKEN') }}"
                     realmId: "{{ secret('QBO_REALM_ID') }}"
                     fetchType: FETCH
                 """
@@ -55,7 +55,7 @@ import lombok.experimental.SuperBuilder;
                     refreshToken: "{{ secret('QBO_REFRESH_TOKEN') }}"
                     realmId: "{{ secret('QBO_REALM_ID') }}"
                     customerId: "58"
-                    status: overdue
+                    status: OVERDUE
                     dueAfter: "2026-10-01"
                     balanceMin: 100
                     fetchType: STORE
@@ -78,10 +78,10 @@ public class List extends AbstractList {
 
     @Schema(
         title = "Invoice status",
-        description = "One of `open` (`Balance > 0`), `overdue` (`Balance > 0` and `DueDate` before today, UTC) or `paid` (`Balance = 0`). Case-insensitive."
+        description = "One of `OPEN` (`Balance > 0`), `OVERDUE` (`Balance > 0` and `DueDate` before today, UTC) or `PAID` (`Balance = 0`). Values are uppercase and case-sensitive."
     )
     @PluginProperty(group = "main")
-    protected Property<String> status;
+    protected Property<Status> status;
 
     @Schema(
         title = "Due before",
@@ -118,19 +118,10 @@ public class List extends AbstractList {
     @PluginProperty(group = "main")
     protected Property<BigDecimal> balanceMin;
 
-    enum Status {
+    public enum Status {
         OPEN,
         OVERDUE,
-        PAID;
-
-        static Status parse(String value) {
-            for (var status : values()) {
-                if (status.name().equalsIgnoreCase(value.trim())) {
-                    return status;
-                }
-            }
-            throw new IllegalArgumentException("status must be one of open, overdue or paid. Provided: " + value);
-        }
+        PAID
     }
 
     @Override
@@ -147,9 +138,9 @@ public class List extends AbstractList {
             conditions.add("CustomerRef = " + quote(rCustomerId));
         }
 
-        var rStatus = render(runContext, status, String.class);
-        if (rStatus != null && !rStatus.isBlank()) {
-            switch (Status.parse(rStatus)) {
+        var rStatus = render(runContext, status, Status.class);
+        if (rStatus != null) {
+            switch (rStatus) {
                 case OPEN -> conditions.add("Balance > '0'");
                 case PAID -> conditions.add("Balance = '0'");
                 case OVERDUE -> {

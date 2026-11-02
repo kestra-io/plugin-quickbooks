@@ -1,5 +1,7 @@
 package io.kestra.plugin.quickbooks.reports;
 
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -20,7 +22,9 @@ import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
+import io.kestra.core.serializers.FileSerde;
 import io.kestra.core.serializers.JacksonMapper;
 import io.kestra.plugin.quickbooks.AbstractQuickBooksConnection;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -75,16 +79,48 @@ import lombok.experimental.SuperBuilder;
                     realmId: "{{ secret('QBO_REALM_ID') }}"
                     report: AgedReceivables
                     customer: "58"
-                    accountingMethod: Accrual
+                    accountingMethod: ACCRUAL
+                """
+        ),
+        @Example(
+            title = "Store a large General Ledger report in internal storage and keep the raw response",
+            full = true,
+            code = """
+                id: qbo_general_ledger
+                namespace: company.finance
+
+                tasks:
+                  - id: general_ledger
+                    type: io.kestra.plugin.quickbooks.reports.Run
+                    clientId: "{{ secret('QBO_CLIENT_ID') }}"
+                    clientSecret: "{{ secret('QBO_CLIENT_SECRET') }}"
+                    refreshToken: "{{ secret('QBO_REFRESH_TOKEN') }}"
+                    realmId: "{{ secret('QBO_REALM_ID') }}"
+                    report: GeneralLedger
+                    startDate: "2026-01-01"
+                    endDate: "2026-12-31"
+                    fetchType: STORE
+                    includeRaw: true
                 """
         )
     }
 )
 @Schema(
     title = "Run a QuickBooks report",
-    description = "Runs a report of the QuickBooks Reports API and flattens its rows. The untouched response is also returned in `raw`."
+    description = "Runs a report of the QuickBooks Reports API and flattens its rows into `rows` (or an Ion file with `fetchType: STORE`). The untouched response is returned in `raw` when `includeRaw` is true."
 )
 public class Run extends AbstractQuickBooksConnection implements RunnableTask<Run.Output> {
+
+    public enum AccountingMethod {
+        CASH("Cash"),
+        ACCRUAL("Accrual");
+
+        private final String apiValue;
+
+        AccountingMethod(String apiValue) {
+            this.apiValue = apiValue;
+        }
+    }
 
     private static final List<String> REPORTS = List.of(
         "AgedReceivables",
@@ -97,7 +133,6 @@ public class Run extends AbstractQuickBooksConnection implements RunnableTask<Ru
         "TrialBalance",
         "CashFlow"
     );
-    private static final List<String> ACCOUNTING_METHODS = List.of("Cash", "Accrual");
 
     @Schema(
         title = "Report",
@@ -139,10 +174,28 @@ public class Run extends AbstractQuickBooksConnection implements RunnableTask<Ru
 
     @Schema(
         title = "Accounting method",
-        description = "`Cash` or `Accrual`, case-insensitive. Sent as `accounting_method`; QuickBooks uses the company preference when unset."
+        description = "`CASH` or `ACCRUAL` (uppercase, case-sensitive). Sent to QuickBooks as `Cash` or `Accrual` in `accounting_method`; QuickBooks uses the company preference when unset."
     )
     @PluginProperty(group = "processing")
-    private Property<String> accountingMethod;
+    private Property<AccountingMethod> accountingMethod;
+
+    @Schema(
+        title = "The way to consume the report rows",
+        description = "FETCH returns the flattened rows in the `rows` output (fine for small reports). STORE writes them to an internal storage Ion file returned as `uri`, which is safer for a `GeneralLedger` or `TrialBalance` over a long period. NONE returns neither, only `size`. FETCH_ONE is not supported.",
+        defaultValue = "FETCH"
+    )
+    @PluginProperty(group = "processing")
+    @Builder.Default
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
+
+    @Schema(
+        title = "Include the raw response",
+        description = "When true, the untouched QuickBooks response is also returned in the `raw` output. It is off by default because it repeats the data of `rows` and doubles the size of the execution outputs.",
+        defaultValue = "false"
+    )
+    @PluginProperty(group = "advanced")
+    @Builder.Default
+    private Property<Boolean> includeRaw = Property.ofValue(false);
 
     @Schema(
         title = "Additional report parameters",
@@ -156,19 +209,25 @@ public class Run extends AbstractQuickBooksConnection implements RunnableTask<Ru
         var rReport = parseChoice("report", runContext.render(this.report).as(String.class)
             .orElseThrow(() -> new IllegalVariableEvaluationException("report is required, set the 'report' property")), REPORTS);
 
-        var rQuery = new LinkedHashMap<String, String>();
+        var rFetchType = runContext.render(this.fetchType).as(FetchType.class).orElse(FetchType.FETCH);
+        if (rFetchType == FetchType.FETCH_ONE) {
+            throw new IllegalArgumentException("fetchType must be one of FETCH, STORE or NONE. Provided: FETCH_ONE");
+        }
+        var rIncludeRaw = runContext.render(this.includeRaw).as(Boolean.class).orElse(false);
+
+        var query = new LinkedHashMap<String, String>();
         var rParameters = this.parameters == null ? null : runContext.render(this.parameters).asMap(String.class, String.class);
         if (rParameters != null) {
-            rQuery.putAll(rParameters);
+            query.putAll(rParameters);
         }
-        putIfPresent(rQuery, "start_date", this.startDate == null ? null : runContext.render(this.startDate).as(LocalDate.class).orElse(null));
-        putIfPresent(rQuery, "end_date", this.endDate == null ? null : runContext.render(this.endDate).as(LocalDate.class).orElse(null));
-        putIfPresent(rQuery, "summarize_column_by", this.summarizeColumnBy == null ? null : runContext.render(this.summarizeColumnBy).as(String.class).orElse(null));
-        putIfPresent(rQuery, "customer", this.customer == null ? null : runContext.render(this.customer).as(String.class).orElse(null));
+        putIfPresent(query, "start_date", this.startDate == null ? null : runContext.render(this.startDate).as(LocalDate.class).orElse(null));
+        putIfPresent(query, "end_date", this.endDate == null ? null : runContext.render(this.endDate).as(LocalDate.class).orElse(null));
+        putIfPresent(query, "summarize_column_by", this.summarizeColumnBy == null ? null : runContext.render(this.summarizeColumnBy).as(String.class).orElse(null));
+        putIfPresent(query, "customer", this.customer == null ? null : runContext.render(this.customer).as(String.class).orElse(null));
 
-        var rAccountingMethod = this.accountingMethod == null ? null : runContext.render(this.accountingMethod).as(String.class).orElse(null);
-        if (rAccountingMethod != null && !rAccountingMethod.isBlank()) {
-            rQuery.put("accounting_method", parseChoice("accountingMethod", rAccountingMethod, ACCOUNTING_METHODS));
+        var rAccountingMethod = this.accountingMethod == null ? null : runContext.render(this.accountingMethod).as(AccountingMethod.class).orElse(null);
+        if (rAccountingMethod != null) {
+            query.put("accounting_method", rAccountingMethod.apiValue);
         }
 
         var rAccessToken = this.getAccessToken(runContext);
@@ -176,34 +235,53 @@ public class Run extends AbstractQuickBooksConnection implements RunnableTask<Ru
         var rBaseUrl = this.getValidatedBaseUrl(runContext);
         var rMinorVersion = this.getValidatedMinorVersion(runContext);
 
-        var rEndpoint = rBaseUrl + "/v3/company/" + rRealmId + "/reports/" + URLEncoder.encode(rReport, StandardCharsets.UTF_8)
+        var endpoint = rBaseUrl + "/v3/company/" + rRealmId + "/reports/" + URLEncoder.encode(rReport, StandardCharsets.UTF_8)
             + "?minorversion=" + rMinorVersion;
-        if (!rQuery.isEmpty()) {
-            rEndpoint += "&" + rQuery.entrySet().stream()
+        if (!query.isEmpty()) {
+            endpoint += "&" + query.entrySet().stream()
                 .map(entry -> URLEncoder.encode(entry.getKey(), StandardCharsets.UTF_8) + "=" + URLEncoder.encode(entry.getValue(), StandardCharsets.UTF_8))
                 .collect(Collectors.joining("&"));
         }
 
         try (var client = HttpClient.builder().runContext(runContext).build()) {
             var request = HttpRequest.builder()
-                .uri(URI.create(rEndpoint))
+                .uri(URI.create(endpoint))
                 .method("GET")
                 .addHeader("Authorization", "Bearer " + rAccessToken)
                 .addHeader("Accept", "application/json")
                 .build();
 
-            var rResponseBody = sendWithBackoff(client, request);
-            if (rResponseBody == null || rResponseBody.isBlank()) {
+            var responseBody = sendWithBackoff(client, request);
+            if (responseBody == null || responseBody.isBlank()) {
                 throw new IllegalStateException("Empty response from the QuickBooks " + rReport + " report, check the report parameters and retry");
             }
 
-            var rRaw = JacksonMapper.ofJson().readValue(rResponseBody, new TypeReference<Map<String, Object>>() {});
+            var raw = JacksonMapper.ofJson().readValue(responseBody, new TypeReference<Map<String, Object>>() {});
+            var rows = flatten(raw);
 
-            return Output.builder()
-                .rows(flatten(rRaw))
-                .raw(rRaw)
-                .build();
+            var output = Output.builder()
+                .size((long) rows.size())
+                .raw(rIncludeRaw ? raw : null);
+
+            switch (rFetchType) {
+                case FETCH -> output.rows(rows);
+                case STORE -> output.uri(store(runContext, rows));
+                default -> {
+                    // NONE: only the size (and the raw response when asked) is returned
+                }
+            }
+            return output.build();
         }
+    }
+
+    private static URI store(RunContext runContext, List<Map<String, Object>> rows) throws IOException {
+        var file = runContext.workingDir().createTempFile(".ion").toFile();
+        try (var out = new FileOutputStream(file)) {
+            for (var row : rows) {
+                FileSerde.write(out, row);
+            }
+        }
+        return runContext.storage().putFile(file);
     }
 
     private static void putIfPresent(Map<String, String> query, String name, Object value) {
@@ -290,13 +368,25 @@ public class Run extends AbstractQuickBooksConnection implements RunnableTask<Ru
     public static class Output implements io.kestra.core.models.tasks.Output {
         @Schema(
             title = "Rows",
-            description = "One map per data or summary row of the report, keyed by column title. `section` holds the enclosing section names joined with ` > ` and `type` is `Data` or `Summary`."
+            description = "One map per data or summary row of the report, keyed by column title. `section` holds the enclosing section names joined with ` > ` and `type` is `Data` or `Summary`. Only set with `fetchType: FETCH`."
         )
         private final List<Map<String, Object>> rows;
 
         @Schema(
+            title = "Rows URI",
+            description = "The internal storage URI of the Ion file holding the flattened rows. Only set with `fetchType: STORE`."
+        )
+        private final URI uri;
+
+        @Schema(
+            title = "Size",
+            description = "The number of flattened rows of the report."
+        )
+        private final Long size;
+
+        @Schema(
             title = "Raw report",
-            description = "The parsed JSON response of QuickBooks, with `Header`, `Columns` and `Rows`."
+            description = "The parsed JSON response of QuickBooks, with `Header`, `Columns` and `Rows`. Only set when `includeRaw` is true."
         )
         private final Map<String, Object> raw;
     }

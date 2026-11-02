@@ -15,6 +15,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ListTest extends AbstractTaskWireMockTest {
 
@@ -75,7 +76,7 @@ public class ListTest extends AbstractTaskWireMockTest {
             .where(Property.ofValue("Terms = '1'"))
             .updatedSince(Property.ofValue(Instant.parse("2026-01-01T00:00:00.789Z")))
             .customerId(Property.ofValue("58"))
-            .status(Property.ofValue("open"))
+            .status(Property.ofValue(List.Status.OPEN))
             .dueBefore(Property.ofValue(LocalDate.parse("2026-03-01")))
             .dueAfter(Property.ofValue(LocalDate.parse("2026-02-01")))
             .txnDateFrom(Property.ofValue(LocalDate.parse("2026-01-15")))
@@ -91,7 +92,7 @@ public class ListTest extends AbstractTaskWireMockTest {
     void paidStatus() throws Exception {
         stubQuery("select * from Invoice where Balance = '0'");
 
-        var run = builder().status(Property.ofValue("PAID")).build().run(runContext());
+        var run = builder().status(Property.ofValue(List.Status.PAID)).build().run(runContext());
 
         assertThat(run.getSize(), is(1L));
     }
@@ -100,24 +101,24 @@ public class ListTest extends AbstractTaskWireMockTest {
     void overdueStatusUsesTodayUtc() throws Exception {
         stubQuery("select * from Invoice where Balance > '0' AND DueDate < '" + LocalDate.now(ZoneOffset.UTC) + "'");
 
-        var run = builder().status(Property.ofValue("overdue")).build().run(runContext());
+        var run = builder().status(Property.ofValue(List.Status.OVERDUE)).build().run(runContext());
 
         assertThat(run.getSize(), is(1L));
     }
 
     @Test
-    void statusIsCaseInsensitiveWhenRendered() throws Exception {
+    void statusIsRenderedFromAnExpression() throws Exception {
         stubQuery("select * from Invoice where Balance = '0'");
 
-        var run = builder().status(Property.ofExpression("{{ 'Paid' }}")).build().run(runContext());
+        var run = builder().status(Property.ofExpression("{{ 'PAID' }}")).build().run(runContext());
 
         assertThat(run.getSize(), is(1L));
     }
 
     @Test
     void unknownStatusIsRejected() {
-        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
-            () -> builder().status(Property.ofValue("pending")).build().run(runContext()));
+        assertThrows(Exception.class,
+            () -> builder().status(Property.ofExpression("{{ 'pending' }}")).build().run(runContext()));
     }
 
     @Test

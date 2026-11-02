@@ -4,14 +4,18 @@ import java.time.LocalDate;
 import java.util.Map;
 
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
+import io.kestra.core.serializers.FileSerde;
 import io.kestra.plugin.quickbooks.AbstractTaskWireMockTest;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import org.junit.jupiter.api.Test;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RunTest extends AbstractTaskWireMockTest {
@@ -62,7 +66,9 @@ public class RunTest extends AbstractTaskWireMockTest {
             .withQueryParam("customer", absent())
             .withQueryParam("summarize_column_by", absent()));
 
-        assertThat(run.getRaw().get("Header"), is(notNullValue()));
+        assertThat(run.getRaw(), is(nullValue()));
+        assertThat(run.getUri(), is(nullValue()));
+        assertThat(run.getSize(), is(3L));
         assertThat(run.getRows().size(), is(3));
         assertThat(run.getRows().get(0), is(Map.of("column1", "Services", "Total", "100.00", "section", "Income", "type", "Data")));
         assertThat(run.getRows().get(1), is(Map.of("column1", "Total Income", "Total", "100.00", "section", "", "type", "Summary")));
@@ -77,7 +83,7 @@ public class RunTest extends AbstractTaskWireMockTest {
             .report(Property.ofValue("AgedReceivables"))
             .summarizeColumnBy(Property.ofValue("Month"))
             .customer(Property.ofValue("58"))
-            .accountingMethod(Property.ofValue("Accrual"))
+            .accountingMethod(Property.ofValue(Run.AccountingMethod.ACCRUAL))
             .parameters(Property.ofValue(Map.of("department", "North & South")))
             .build()
             .run(runContext());
@@ -106,12 +112,12 @@ public class RunTest extends AbstractTaskWireMockTest {
     }
 
     @Test
-    void reportAndAccountingMethodAreCaseInsensitive() throws Exception {
+    void reportIsCaseInsensitive() throws Exception {
         stubReport("BalanceSheet");
 
         builder()
             .report(Property.ofValue("balancesheet"))
-            .accountingMethod(Property.ofValue("cASH"))
+            .accountingMethod(Property.ofValue(Run.AccountingMethod.CASH))
             .build()
             .run(runContext());
 
@@ -121,14 +127,73 @@ public class RunTest extends AbstractTaskWireMockTest {
 
     @Test
     void unknownAccountingMethodFailsBeforeAnyCall() {
-        var error = assertThrows(IllegalArgumentException.class, () -> builder()
+        assertThrows(Exception.class, () -> builder()
             .report(Property.ofValue("ProfitAndLoss"))
-            .accountingMethod(Property.ofValue("Hybrid"))
+            .accountingMethod(Property.ofExpression("{{ 'Hybrid' }}"))
             .build()
             .run(runContext()));
 
-        assertThat(error.getMessage().contains("Cash, Accrual"), is(true));
         verify(0, postRequestedFor(urlEqualTo("/oauth2/v1/tokens/bearer")));
+    }
+
+    @Test
+    void includeRawReturnsTheUntouchedResponse() throws Exception {
+        stubReport("ProfitAndLoss");
+
+        var run = builder()
+            .report(Property.ofValue("ProfitAndLoss"))
+            .includeRaw(Property.ofValue(true))
+            .build()
+            .run(runContext());
+
+        assertThat(run.getRaw().get("Header"), is(notNullValue()));
+        assertThat(run.getRows().size(), is(3));
+    }
+
+    @Test
+    void storeWritesTheRowsToAnIonFileAndReturnsNoInlineRows() throws Exception {
+        stubReport("ProfitAndLoss");
+        var runContext = runContext();
+
+        var run = builder()
+            .report(Property.ofValue("ProfitAndLoss"))
+            .fetchType(Property.ofValue(FetchType.STORE))
+            .build()
+            .run(runContext);
+
+        assertThat(run.getRows(), is(nullValue()));
+        assertThat(run.getRaw(), is(nullValue()));
+        assertThat(run.getSize(), is(3L));
+        assertThat(run.getUri(), is(notNullValue()));
+        try (var in = runContext.storage().getFile(run.getUri())) {
+            var rows = FileSerde.readAll(in, new TypeReference<Map<String, Object>>() {}).collectList().block();
+            assertThat(rows.size(), is(3));
+            assertThat(rows.get(0).get("column1"), is("Services"));
+        }
+    }
+
+    @Test
+    void noneReturnsOnlyTheSize() throws Exception {
+        stubReport("ProfitAndLoss");
+
+        var run = builder()
+            .report(Property.ofValue("ProfitAndLoss"))
+            .fetchType(Property.ofValue(FetchType.NONE))
+            .build()
+            .run(runContext());
+
+        assertThat(run.getRows(), is(nullValue()));
+        assertThat(run.getUri(), is(nullValue()));
+        assertThat(run.getSize(), is(3L));
+    }
+
+    @Test
+    void fetchOneIsRejected() {
+        assertThrows(IllegalArgumentException.class, () -> builder()
+            .report(Property.ofValue("ProfitAndLoss"))
+            .fetchType(Property.ofValue(FetchType.FETCH_ONE))
+            .build()
+            .run(runContext()));
     }
 
     @Test
