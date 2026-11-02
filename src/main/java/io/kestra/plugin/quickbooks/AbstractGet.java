@@ -52,7 +52,7 @@ public abstract class AbstractGet extends AbstractQuickBooksConnection implement
         var endpoint = rBaseUrl + "/v3/company/" + rRealmId + "/" + entityPath() + "/"
             + URLEncoder.encode(rEntityId, StandardCharsets.UTF_8) + "?minorversion=" + rMinorVersion;
 
-        try (HttpClient client = HttpClient.builder().runContext(runContext).build()) {
+        try (var client = HttpClient.builder().runContext(runContext).build()) {
             var request = HttpRequest.builder()
                 .uri(URI.create(endpoint))
                 .method("GET")

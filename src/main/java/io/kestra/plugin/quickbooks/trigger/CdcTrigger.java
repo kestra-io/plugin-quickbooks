@@ -44,8 +44,8 @@ import java.util.Optional;
                   - id: watch_invoices
                     type: io.kestra.plugin.quickbooks.trigger.CdcTrigger
                     clientId: "{{ secret('QBO_CLIENT_ID') }}"
-                    clientSecret: "{{ secret('QUICKBOOKS_CLIENT_SECRET') }}"
-                    refreshToken: "{{ secret('QUICKBOOKS_REFRESH_TOKEN') }}"
+                    clientSecret: "{{ secret('QBO_CLIENT_SECRET') }}"
+                    refreshToken: "{{ secret('QBO_REFRESH_TOKEN') }}"
                     realmId: "{{ secret('QBO_REALM_ID') }}"
                     entities:
                       - Invoice
@@ -77,6 +77,7 @@ public class CdcTrigger extends AbstractQuickBooksTrigger implements TriggerOutp
         title = "Polling interval",
         description = "How often the trigger should poll for changes."
     )
+    @PluginProperty(group = "execution")
     @Builder.Default
     private final Duration interval = Duration.ofMinutes(15);
 

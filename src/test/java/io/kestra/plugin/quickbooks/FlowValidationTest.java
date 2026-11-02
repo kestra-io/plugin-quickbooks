@@ -6,6 +6,19 @@ import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.validations.ModelValidator;
 import io.kestra.core.serializers.YamlParser;
 import io.kestra.core.models.flows.Flow;
+import io.kestra.plugin.quickbooks.companyinfo.Get;
+import io.kestra.plugin.quickbooks.invoices.Send;
+import io.kestra.plugin.quickbooks.invoices.Pdf;
+import io.kestra.plugin.quickbooks.invoices.Create;
+import io.kestra.plugin.quickbooks.invoices.Update;
+import io.kestra.plugin.quickbooks.trigger.CdcTrigger;
+import io.kestra.plugin.quickbooks.trigger.WebhookTrigger;
+import io.kestra.plugin.quickbooks.invoices.InvoiceTrigger;
+import io.kestra.plugin.quickbooks.invoices.OverdueInvoiceTrigger;
+import io.kestra.plugin.quickbooks.payments.PaymentReceivedTrigger;
+import io.kestra.plugin.quickbooks.reports.Run;
+import io.kestra.plugin.quickbooks.query.Changes;
+import io.kestra.plugin.quickbooks.query.Query;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
@@ -29,9 +42,9 @@ class FlowValidationTest {
             tasks:
               - id: company_info
                 type: io.kestra.plugin.quickbooks.companyinfo.Get
-                clientId: "{{ secret('QB_CLIENT_ID') }}"
-                clientSecret: "{{ secret('QB_CLIENT_SECRET') }}"
-                refreshToken: "{{ secret('QB_REFRESH_TOKEN') }}"
+                clientId: "{{ secret('QBO_CLIENT_ID') }}"
+                clientSecret: "{{ secret('QBO_CLIENT_SECRET') }}"
+                refreshToken: "{{ secret('QBO_REFRESH_TOKEN') }}"
                 realmId: "123456"
                 minorVersion: 75
             """, Flow.class);
@@ -63,10 +76,10 @@ class FlowValidationTest {
     void invoiceTaskExamplesAreValid() {
         var tasks = List.of(
             io.kestra.plugin.quickbooks.invoices.List.class,
-            io.kestra.plugin.quickbooks.invoices.Send.class,
-            io.kestra.plugin.quickbooks.invoices.Pdf.class,
-            io.kestra.plugin.quickbooks.invoices.Create.class,
-            io.kestra.plugin.quickbooks.invoices.Update.class
+            Send.class,
+            Pdf.class,
+            Create.class,
+            Update.class
         );
 
         for (var taskClass : tasks) {
@@ -91,7 +104,7 @@ class FlowValidationTest {
                 refreshToken: "rt"
                 realmId: "123456"
                 customerId: "58"
-                status: open
+                status: OPEN
                 dueBefore: "2026-03-01"
                 dueAfter: "2026-02-01"
                 txnDateFrom: "2026-01-01"
@@ -126,11 +139,11 @@ class FlowValidationTest {
     @Test
     void triggerExamplesAreValid() {
         var triggers = List.of(
-            io.kestra.plugin.quickbooks.trigger.CdcTrigger.class,
-            io.kestra.plugin.quickbooks.trigger.WebhookTrigger.class,
-            io.kestra.plugin.quickbooks.invoices.InvoiceTrigger.class,
-            io.kestra.plugin.quickbooks.invoices.OverdueInvoiceTrigger.class,
-            io.kestra.plugin.quickbooks.payments.PaymentReceivedTrigger.class
+            CdcTrigger.class,
+            WebhookTrigger.class,
+            InvoiceTrigger.class,
+            OverdueInvoiceTrigger.class,
+            PaymentReceivedTrigger.class
         );
 
         for (var triggerClass : triggers) {
@@ -142,7 +155,7 @@ class FlowValidationTest {
     }
 
     @Test
-    void invoiceTriggerAcceptsLowercaseEvent() {
+    void invoiceTriggerAcceptsUppercaseEvent() {
         var flow = YamlParser.parse("""
             id: quickbooks_invoice_event
             namespace: company.team
@@ -154,7 +167,7 @@ class FlowValidationTest {
                 clientSecret: "csec"
                 refreshToken: "rt"
                 realmId: "123456"
-                event: updated
+                event: UPDATED
 
             tasks:
               - id: log
@@ -204,7 +217,9 @@ class FlowValidationTest {
                 endDate: "2026-03-31"
                 summarizeColumnBy: Month
                 customer: "58"
-                accountingMethod: accrual
+                accountingMethod: ACCRUAL
+                fetchType: STORE
+                includeRaw: true
                 parameters:
                   department: "1"
             """, Flow.class);
@@ -215,10 +230,10 @@ class FlowValidationTest {
     @Test
     void reportAndChangesExamplesAreValid() {
         var tasks = List.of(
-            io.kestra.plugin.quickbooks.reports.Run.class,
-            io.kestra.plugin.quickbooks.query.Changes.class,
-            io.kestra.plugin.quickbooks.query.Query.class,
-            io.kestra.plugin.quickbooks.companyinfo.Get.class
+            Run.class,
+            Changes.class,
+            Query.class,
+            Get.class
         );
 
         for (var taskClass : tasks) {

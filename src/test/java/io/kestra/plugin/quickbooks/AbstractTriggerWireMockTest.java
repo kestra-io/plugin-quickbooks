@@ -1,5 +1,6 @@
 package io.kestra.plugin.quickbooks;
 
+import io.kestra.core.models.triggers.AbstractTrigger;
 import java.time.ZonedDateTime;
 import java.util.Map;
 import java.util.Optional;
@@ -45,7 +46,7 @@ public abstract class AbstractTriggerWireMockTest extends AbstractTaskWireMockTe
             .build();
 
         var runContext = (DefaultRunContext) runContext();
-        runContextFactory.initializer().forScheduler(runContext, triggerContext, (io.kestra.core.models.triggers.AbstractTrigger) trigger);
+        runContextFactory.initializer().forScheduler(runContext, triggerContext, (AbstractTrigger) trigger);
 
         var conditionContext = ConditionContext.builder().runContext(runContext).flow(flow).build();
         return trigger.evaluate(conditionContext, triggerContext);

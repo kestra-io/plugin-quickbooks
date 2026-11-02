@@ -100,33 +100,33 @@ public class Changes extends AbstractQuickBooksConnection implements RunnableTas
         var rBaseUrl = this.getValidatedBaseUrl(runContext);
         var rMinorVersion = this.getValidatedMinorVersion(runContext);
 
-        var rEndpoint = rBaseUrl + "/v3/company/" + rRealmId + "/cdc?minorversion=" + rMinorVersion
+        var endpoint = rBaseUrl + "/v3/company/" + rRealmId + "/cdc?minorversion=" + rMinorVersion
             + "&entities=" + URLEncoder.encode(String.join(",", rEntities), StandardCharsets.UTF_8)
             + "&changedSince=" + URLEncoder.encode(rFormattedChangedSince, StandardCharsets.UTF_8);
 
         try (var client = HttpClient.builder().runContext(runContext).build()) {
             var request = HttpRequest.builder()
-                .uri(URI.create(rEndpoint))
+                .uri(URI.create(endpoint))
                 .method("GET")
                 .addHeader("Authorization", "Bearer " + rAccessToken)
                 .addHeader("Accept", "application/json")
                 .build();
 
-            var rResponseBody = sendWithBackoff(client, request);
-            if (rResponseBody == null || rResponseBody.isBlank()) {
+            var responseBody = sendWithBackoff(client, request);
+            if (responseBody == null || responseBody.isBlank()) {
                 throw new IllegalStateException("Empty response from the QuickBooks CDC endpoint, check changedSince is within the last 30 days and retry");
             }
 
-            var rResponse = JacksonMapper.ofJson().readValue(rResponseBody, new TypeReference<Map<String, Object>>() {});
+            var response = JacksonMapper.ofJson().readValue(responseBody, new TypeReference<Map<String, Object>>() {});
 
-            var rRows = new LinkedHashMap<String, List<Map<String, Object>>>();
+            var rows = new LinkedHashMap<String, List<Map<String, Object>>>();
             for (var entity : rEntities) {
-                rRows.put(entity, records(rResponse, entity).stream().map(Changes::toChangeRow).toList());
+                rows.put(entity, records(response, entity).stream().map(Changes::toChangeRow).toList());
             }
 
             return Output.builder()
-                .rows(rRows)
-                .cdcResponse(rResponse)
+                .rows(rows)
+                .cdcResponse(response)
                 .build();
         }
     }

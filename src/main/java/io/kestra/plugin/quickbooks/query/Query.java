@@ -34,8 +34,8 @@ import lombok.experimental.SuperBuilder;
                   - id: open_invoices
                     type: io.kestra.plugin.quickbooks.query.Query
                     clientId: "{{ secret('QBO_CLIENT_ID') }}"
-                    clientSecret: "{{ secret('QUICKBOOKS_CLIENT_SECRET') }}"
-                    refreshToken: "{{ secret('QUICKBOOKS_REFRESH_TOKEN') }}"
+                    clientSecret: "{{ secret('QBO_CLIENT_SECRET') }}"
+                    refreshToken: "{{ secret('QBO_REFRESH_TOKEN') }}"
                     realmId: "{{ secret('QBO_REALM_ID') }}"
                     query: "select * from Invoice where Balance > '0'"
                     fetchType: STORE

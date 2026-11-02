@@ -74,7 +74,7 @@ public class Send extends AbstractInvoiceById implements RunnableTask<Send.Outpu
             url += "&sendTo=" + URLEncoder.encode(rSendTo, StandardCharsets.UTF_8);
         }
 
-        try (HttpClient client = HttpClient.builder().runContext(runContext).build()) {
+        try (var client = HttpClient.builder().runContext(runContext).build()) {
             // QuickBooks requires an octet-stream content type on this endpoint, with no payload.
             var request = HttpRequest.builder()
                 .uri(URI.create(url))

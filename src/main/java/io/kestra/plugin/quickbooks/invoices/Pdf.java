@@ -57,7 +57,7 @@ public class Pdf extends AbstractInvoiceById implements RunnableTask<Pdf.Output>
         var rAccessToken = getAccessToken(runContext);
         var url = invoiceUrl(runContext, rId, "/pdf") + "?minorversion=" + getValidatedMinorVersion(runContext);
 
-        try (HttpClient client = HttpClient.builder().runContext(runContext).build()) {
+        try (var client = HttpClient.builder().runContext(runContext).build()) {
             var request = HttpRequest.builder()
                 .uri(URI.create(url))
                 .method("GET")

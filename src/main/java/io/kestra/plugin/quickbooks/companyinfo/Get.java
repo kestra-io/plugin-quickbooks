@@ -37,8 +37,8 @@ import java.util.Map;
                   - id: get_company_info
                     type: io.kestra.plugin.quickbooks.companyinfo.Get
                     clientId: "{{ secret('QBO_CLIENT_ID') }}"
-                    clientSecret: "{{ secret('QUICKBOOKS_CLIENT_SECRET') }}"
-                    refreshToken: "{{ secret('QUICKBOOKS_REFRESH_TOKEN') }}"
+                    clientSecret: "{{ secret('QBO_CLIENT_SECRET') }}"
+                    refreshToken: "{{ secret('QBO_REFRESH_TOKEN') }}"
                     realmId: "{{ secret('QBO_REALM_ID') }}"
                 """
         )

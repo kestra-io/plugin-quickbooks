@@ -14,6 +14,7 @@ import jakarta.validation.constraints.NotNull;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
+import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.triggers.TriggerContext;
@@ -77,6 +78,7 @@ public class PaymentReceivedTrigger extends AbstractQuickBooksTrigger implements
         title = "Polling interval",
         description = "How often the trigger should poll for new payments."
     )
+    @PluginProperty(group = "execution")
     @Builder.Default
     private final Duration interval = Duration.ofMinutes(15);
 

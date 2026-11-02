@@ -119,6 +119,7 @@ public class OverdueInvoiceTrigger extends AbstractQuickBooksTrigger implements 
         description = "How often the trigger should look for overdue invoices.",
         defaultValue = "P1D"
     )
+    @PluginProperty(group = "execution")
     @Builder.Default
     private final Duration interval = Duration.ofDays(1);
 

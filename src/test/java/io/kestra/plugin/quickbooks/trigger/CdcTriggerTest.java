@@ -1,5 +1,6 @@
 package io.kestra.plugin.quickbooks.trigger;
 
+import io.kestra.core.runners.DefaultRunContext;
 import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.flows.Flow;
@@ -63,7 +64,7 @@ public class CdcTriggerTest extends AbstractTaskWireMockTest {
             .date(ZonedDateTime.parse("2023-09-01T12:00:00Z"))
             .build();
 
-        var runContext = (io.kestra.core.runners.DefaultRunContext) runContext();
+        var runContext = (DefaultRunContext) runContext();
         runContextFactory.initializer().forScheduler(runContext, triggerContext, trigger);
 
         var conditionContext = ConditionContext.builder()
