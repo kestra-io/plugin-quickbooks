@@ -14,7 +14,7 @@ All tasks in this plugin extend the `AbstractQuickBooksConnection` and require s
 > [!WARNING]
 > Due to Intuit's refresh token rotation policy, token refreshes across multiple workers are only guarded by a **best-effort KV lease**, not a distributed lock. Running multiple QuickBooks tasks concurrently across different Kestra workers may fail with "Another worker is currently rotating the QuickBooks token" (configure task retries) or, in the worst case, lose a token and fail with `invalid_grant`.
 
-To authenticate your tasks, provide the following properties. We recommend using [Kestra Secrets](https://kestra.io/docs/concepts/secret) and [Plugin Defaults](https://kestra.io/docs/concepts/plugin-defaults) to manage them:
+To authenticate your tasks, provide the following properties. We recommend storing them as [Kestra Secrets](https://kestra.io/docs/concepts/secret). In Enterprise Edition, you can also inject them into every QuickBooks task with a [Policy](https://kestra.io/docs/enterprise/governance/policies):
 
 - `clientId`: Your QuickBooks application's Client ID.
 - `clientSecret`: Your QuickBooks application's Client Secret.
